@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>vsl-tracker.gs — Code Viewer</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1e1e1e; color:#d4d4d4; font-family:'Fira Code','SF Mono','Menlo',monospace; font-size:13px; line-height:1.6; }
+.toolbar { position:sticky; top:0; z-index:10; background:#252526; border-bottom:1px solid #333; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; }
+.toolbar h1 { font-size:14px; color:#fff; font-weight:600; }
+.toolbar .info { font-size:12px; color:#888; }
+pre { padding:20px; counter-reset:line; white-space:pre; overflow-x:auto; }
+code { display:block; }
+.line { display:block; padding:0 20px 0 60px; position:relative; }
+.line:hover { background:#2a2d2e; }
+.line::before { content:counter(line); counter-increment:line; position:absolute; left:0; width:50px; text-align:right; color:#555; padding-right:10px; border-right:1px solid #333; }
+/* Syntax highlighting */
+.comment { color:#6a9955; }
+.keyword { color:#569cd6; }
+.string { color:#ce9178; }
+.function { color:#dcdcaa; }
+.number { color:#b5cea8; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <h1>vsl-tracker.gs</h1>
+  <div class="info">1,365 lines &bull; Google Apps Script &bull; VSL Funnel Tracking System</div>
+</div>
+<pre><code>/**
+ * VSL FUNNEL TRACKING SYSTEM — Google Apps Script
+ * ================================================
+ * The ultimate VSL funnel tracker with per-lead journey tracking.
+ * Builds a complete 11-tab tracking spreadsheet.
+ *
+ * HOW TO USE:
+ * 1. Open a new Google Sheets file
+ * 2. Go to Extensions &gt; Apps Script
+ * 3. Paste this entire script into the editor
+ * 4. Save (Ctrl+S / Cmd+S)
+ * 5. Click the Run button (&gt;) with buildVSLTracker selected
+ * 6. Authorise permissions when prompted
+ * 7. Return to your spreadsheet — all tabs will be built automatically
+ *
+ * TABS CREATED:
+ *   📊 DASHBOARD            — KPI cards, funnel flow, RAG status, week-on-week
+ *   📢 AD METRICS           — Multi-platform ad data (unified columns)
+ *   🎯 FUNNEL FLOW          — 12-stage conversion rates vs dynamic benchmarks
+ *   📅 DAILY LOG            — Day-by-day counts auto-calculated from LEAD JOURNEYS
+ *   🎥 VSL ANALYTICS        — Video play rate, milestone distribution, drop-off
+ *   📱 NURTURE METRICS      — Email + SMS/WhatsApp performance
+ *   💰 REVENUE METRICS      — Deal tracking, ROAS, RPL, LTV, attribution
+ *   🔍 DISCREPANCY ANALYSER — 8 auto-detected bottlenecks with prescribed actions
+ *   📈 BENCHMARKS           — Mid/High/Ultra-high tiers with dynamic lookup
+ *   👤 LEAD JOURNEYS        — Per-lead event log (hidden, source of truth)
+ *   ⚙️ CONFIG               — Client settings, platform config, API keys
+ */
+
+// ─────────────────────────────────────────────
+// COLOUR PALETTE
+// ─────────────────────────────────────────────
+var COLOURS = {
+  headerBg:      &quot;#1a73e8&quot;,
+  headerText:    &quot;#ffffff&quot;,
+  goodBg:        &quot;#e6f4ea&quot;,
+  goodText:      &quot;#137333&quot;,
+  watchBg:       &quot;#fff3e0&quot;,
+  watchText:     &quot;#b45309&quot;,
+  badBg:         &quot;#fce8e6&quot;,
+  badText:       &quot;#c5221f&quot;,
+  criticalBg:    &quot;#880000&quot;,
+  criticalText:  &quot;#ffffff&quot;,
+  inputBg:       &quot;#fff9c4&quot;,
+  inputText:     &quot;#333333&quot;,
+  subheaderBg:   &quot;#e8f0fe&quot;,
+  subheaderText: &quot;#1a73e8&quot;,
+  sectionBg:     &quot;#f8f9fa&quot;,
+  sectionText:   &quot;#202124&quot;,
+  totalsBg:      &quot;#e2eafc&quot;,
+  protectBg:     &quot;#f1f3f4&quot;,
+  borderColor:   &quot;#dadce0&quot;,
+  tabBlue:       &quot;#4285f4&quot;,
+  tabGreen:      &quot;#34a853&quot;,
+  tabOrange:     &quot;#fbbc04&quot;,
+  tabRed:        &quot;#ea4335&quot;,
+  tabPurple:     &quot;#9c27b0&quot;,
+  tabTeal:       &quot;#00897b&quot;,
+  tabGrey:       &quot;#607d8b&quot;,
+  tabPink:       &quot;#e91e63&quot;,
+  tabBlack:      &quot;#333333&quot;
+};
+
+// ─────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────
+var MAX_LEAD_ROWS = 15000;
+var DAILY_LOG_DAYS = 90;
+var VSL_ANALYTICS_DAYS = 90;
+
+// ─────────────────────────────────────────────
+// MAIN ENTRY FUNCTION
+// ─────────────────────────────────────────────
+function buildVSLTracker() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ss.rename(&quot;VSL Funnel Tracker&quot;);
+
+  var defaultSheet = ss.getSheetByName(&quot;Sheet1&quot;);
+  if (defaultSheet) {
+    if (ss.getSheets().length === 1) {
+      defaultSheet.setName(&quot;_temp&quot;);
+    } else {
+      ss.deleteSheet(defaultSheet);
+    }
+  }
+
+  // Build all tabs in order
+  buildConfig(ss);
+  buildLeadJourneys(ss);
+  buildDashboard(ss);
+  buildAdMetrics(ss);
+  buildFunnelFlow(ss);
+  buildDailyLog(ss);
+  buildVSLAnalytics(ss);
+  buildNurtureMetrics(ss);
+  buildRevenueMetrics(ss);
+  buildDiscrepancyAnalyser(ss);
+  buildBenchmarks(ss);
+
+  // Hide LEAD JOURNEYS tab
+  var ljSheet = ss.getSheetByName(&quot;👤 LEAD JOURNEYS&quot;);
+  if (ljSheet) ljSheet.hideSheet();
+
+  // Remove temp sheet
+  var tempSheet = ss.getSheetByName(&quot;_temp&quot;);
+  if (tempSheet) ss.deleteSheet(tempSheet);
+
+  // Navigate to Dashboard
+  ss.setActiveSheet(ss.getSheetByName(&quot;📊 DASHBOARD&quot;));
+  SpreadsheetApp.flush();
+
+  Browser.msgBox(
+    &quot;VSL Funnel Tracker built successfully!\n\n&quot; +
+    &quot;All 11 tabs have been created.\n\n&quot; +
+    &quot;START HERE:\n&quot; +
+    &quot;1. Fill in the CONFIG tab with your client details\n&quot; +
+    &quot;2. Deploy the Vercel API (see SETUP-GUIDE.md)\n&quot; +
+    &quot;3. Install the tracking snippet on your funnel pages\n&quot; +
+    &quot;4. Connect your webhooks (Typeform, Calendly, CRM)\n\n&quot; +
+    &quot;Data will flow automatically into LEAD JOURNEYS,\n&quot; +
+    &quot;and all other tabs will auto-calculate.&quot;
+  );
+}
+
+// ─────────────────────────────────────────────
+// HELPER FUNCTIONS
+// ─────────────────────────────────────────────
+function getOrCreateSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  sheet.clear();
+  sheet.clearConditionalFormatRules();
+  return sheet;
+}
+
+function styleHeader(sheet, row, col, numCols, text) {
+  var range = sheet.getRange(row, col, 1, numCols);
+  range.merge()
+       .setValue(text)
+       .setBackground(COLOURS.headerBg)
+       .setFontColor(COLOURS.headerText)
+       .setFontWeight(&quot;bold&quot;)
+       .setFontSize(14)
+       .setHorizontalAlignment(&quot;center&quot;)
+       .setVerticalAlignment(&quot;middle&quot;);
+  sheet.setRowHeight(row, 40);
+}
+
+function styleSubHeader(sheet, row, col, numCols, text) {
+  var range = sheet.getRange(row, col, 1, numCols);
+  range.merge()
+       .setValue(text)
+       .setBackground(COLOURS.subheaderBg)
+       .setFontColor(COLOURS.subheaderText)
+       .setFontWeight(&quot;bold&quot;)
+       .setFontSize(11)
+       .setHorizontalAlignment(&quot;left&quot;);
+  sheet.setRowHeight(row, 28);
+}
+
+function styleColumnHeaders(sheet, row, headers, startCol) {
+  startCol = startCol || 1;
+  for (var i = 0; i &lt; headers.length; i++) {
+    var cell = sheet.getRange(row, startCol + i);
+    cell.setValue(headers[i])
+        .setBackground(COLOURS.headerBg)
+        .setFontColor(COLOURS.headerText)
+        .setFontWeight(&quot;bold&quot;)
+        .setFontSize(9)
+        .setHorizontalAlignment(&quot;center&quot;)
+        .setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+  }
+  sheet.setRowHeight(row, 32);
+}
+
+function setInputRows(sheet, startRow, numRows, startCol, numCols) {
+  var range = sheet.getRange(startRow, startCol, numRows, numCols);
+  range.setBackground(COLOURS.inputBg);
+}
+
+function addBorders(sheet, startRow, numRows, startCol, numCols) {
+  var range = sheet.getRange(startRow, startCol, numRows, numCols);
+  range.setBorder(true, true, true, true, true, true, COLOURS.borderColor, SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function setColWidths(sheet, widths) {
+  for (var i = 0; i &lt; widths.length; i++) {
+    if (widths[i] &gt; 0) sheet.setColumnWidth(i + 1, widths[i]);
+  }
+}
+
+function addRAGConditionalFormatting(sheet, range) {
+  var rules = sheet.getConditionalFormatRules();
+
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextContains(&quot;On Track&quot;)
+    .setBackground(COLOURS.goodBg).setFontColor(COLOURS.goodText)
+    .setRanges([range]).build());
+
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextContains(&quot;Watch&quot;)
+    .setBackground(COLOURS.watchBg).setFontColor(COLOURS.watchText)
+    .setRanges([range]).build());
+
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextContains(&quot;Danger&quot;)
+    .setBackground(COLOURS.badBg).setFontColor(COLOURS.badText)
+    .setRanges([range]).build());
+
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextContains(&quot;Critical&quot;)
+    .setBackground(COLOURS.criticalBg).setFontColor(COLOURS.criticalText)
+    .setRanges([range]).build());
+
+  sheet.setConditionalFormatRules(rules);
+}
+
+// ─────────────────────────────────────────────
+// TAB: ⚙️ CONFIG
+// ─────────────────────────────────────────────
+function buildConfig(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;⚙️ CONFIG&quot;);
+  sheet.setTabColor(COLOURS.tabBlack);
+  sheet.setFrozenRows(1);
+
+  styleHeader(sheet, 1, 1, 4, &quot;⚙️ VSL FUNNEL TRACKER — CONFIGURATION&quot;);
+
+  var settings = [
+    [&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;CLIENT DETAILS&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;Client Name&quot;, &quot;&quot;, &quot;&quot;, &quot;Enter client/business name&quot;],
+    [&quot;Offer Name&quot;, &quot;&quot;, &quot;&quot;, &quot;e.g. Elite Coaching Programme&quot;],
+    [&quot;Price Tier&quot;, &quot;high&quot;, &quot;&quot;, &quot;Options: mid, high, ultra_high&quot;],
+    [&quot;Offer Price&quot;, &quot;&quot;, &quot;&quot;, &quot;e.g. 8000&quot;],
+    [&quot;Currency Symbol&quot;, &quot;\u00a3&quot;, &quot;&quot;, &quot;\u00a3, $, \u20ac etc.&quot;],
+    [&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;DEPLOYMENT&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;Webhook URL&quot;, &quot;&quot;, &quot;&quot;, &quot;Auto-filled after Vercel deploy&quot;],
+    [&quot;Spreadsheet ID&quot;, &quot;&quot;, &quot;&quot;, &quot;Auto-filled by script (see below)&quot;],
+    [&quot;API Secret&quot;, &quot;&quot;, &quot;&quot;, &quot;Shared secret for webhook auth&quot;],
+    [&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;TRACKING PIXELS&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;Meta Pixel ID&quot;, &quot;&quot;, &quot;&quot;, &quot;15-16 digit number from Events Manager&quot;],
+    [&quot;GA4 Measurement ID&quot;, &quot;&quot;, &quot;&quot;, &quot;e.g. G-XXXXXXXXXX&quot;],
+    [&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;PLATFORM CONFIG&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;Video Platform&quot;, &quot;auto&quot;, &quot;&quot;, &quot;auto, vidalytics, wistia, youtube, vimeo&quot;],
+    [&quot;Form Platform&quot;, &quot;typeform&quot;, &quot;&quot;, &quot;typeform, jotform, ghl, tally&quot;],
+    [&quot;Booking Platform&quot;, &quot;calendly&quot;, &quot;&quot;, &quot;calendly, ghl_calendar&quot;],
+    [&quot;CRM Platform&quot;, &quot;ghl&quot;, &quot;&quot;, &quot;ghl, close, hubspot&quot;],
+    [&quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;API KEYS (keep private)&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;],
+    [&quot;Google Service Account Email&quot;, &quot;&quot;, &quot;&quot;, &quot;From GCP console&quot;],
+    [&quot;Meta Access Token&quot;, &quot;&quot;, &quot;&quot;, &quot;For Meta Ads API sync&quot;],
+    [&quot;Calendly PAT&quot;, &quot;&quot;, &quot;&quot;, &quot;Personal Access Token&quot;],
+    [&quot;GHL API Key&quot;, &quot;&quot;, &quot;&quot;, &quot;Private Integration Token&quot;],
+    [&quot;Close API Key&quot;, &quot;&quot;, &quot;&quot;, &quot;Close.com API key&quot;],
+    [&quot;HubSpot Access Token&quot;, &quot;&quot;, &quot;&quot;, &quot;Private app token&quot;]
+  ];
+
+  var headerRows = [2, 9, 14, 18, 24];
+  var configHeaders = [&quot;Setting&quot;, &quot;Value&quot;, &quot;&quot;, &quot;Notes&quot;];
+  styleColumnHeaders(sheet, 2, configHeaders);
+
+  for (var i = 0; i &lt; settings.length; i++) {
+    var r = i + 2;
+    var row = settings[i];
+    sheet.getRange(r, 1).setValue(row[0]);
+    sheet.getRange(r, 2).setValue(row[1]);
+    sheet.getRange(r, 4).setValue(row[3]).setFontColor(&quot;#888888&quot;).setFontStyle(&quot;italic&quot;);
+
+    if (headerRows.indexOf(i) &gt;= 0) {
+      sheet.getRange(r, 1, 1, 4).setBackground(COLOURS.subheaderBg)
+        .setFontColor(COLOURS.subheaderText).setFontWeight(&quot;bold&quot;);
+    } else if (row[0] !== &quot;&quot; &amp;&amp; row[0].indexOf(&quot;API&quot;) &lt; 0) {
+      sheet.getRange(r, 2).setBackground(COLOURS.inputBg);
+    }
+  }
+
+  // Auto-fill Spreadsheet ID
+  sheet.getRange(12, 2).setValue(ss.getId());
+
+  // Data validation for Price Tier
+  var tierRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;mid&quot;, &quot;high&quot;, &quot;ultra_high&quot;], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(6, 2).setDataValidation(tierRule);
+
+  // Data validation for Video Platform
+  var videoRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;auto&quot;, &quot;vidalytics&quot;, &quot;wistia&quot;, &quot;youtube&quot;, &quot;vimeo&quot;], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(20, 2).setDataValidation(videoRule);
+
+  // Data validation for Form Platform
+  var formRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;typeform&quot;, &quot;jotform&quot;, &quot;ghl&quot;, &quot;tally&quot;], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(21, 2).setDataValidation(formRule);
+
+  // Data validation for Booking Platform
+  var bookingRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;calendly&quot;, &quot;ghl_calendar&quot;], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(22, 2).setDataValidation(bookingRule);
+
+  // Data validation for CRM Platform
+  var crmRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;ghl&quot;, &quot;close&quot;, &quot;hubspot&quot;], true)
+    .setAllowInvalid(false)
+    .build();
+  sheet.getRange(23, 2).setDataValidation(crmRule);
+
+  setColWidths(sheet, [260, 300, 20, 350]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 👤 LEAD JOURNEYS (Hidden — Source of Truth)
+// ─────────────────────────────────────────────
+function buildLeadJourneys(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;👤 LEAD JOURNEYS&quot;);
+  sheet.setTabColor(COLOURS.tabGrey);
+  sheet.setFrozenRows(1);
+
+  var headers = [
+    &quot;Timestamp&quot;,          // A
+    &quot;Email&quot;,              // B
+    &quot;Event Type&quot;,         // C
+    &quot;Event Source&quot;,       // D
+    &quot;First Name&quot;,         // E
+    &quot;Last Name&quot;,          // F
+    &quot;Phone&quot;,              // G
+    &quot;UTM Source&quot;,         // H
+    &quot;UTM Medium&quot;,         // I
+    &quot;UTM Campaign&quot;,       // J
+    &quot;UTM Content&quot;,        // K
+    &quot;UTM Term&quot;,           // L
+    &quot;Page URL&quot;,           // M
+    &quot;FBCLID&quot;,             // N
+    &quot;GCLID&quot;,              // O
+    &quot;Video Milestone&quot;,    // P
+    &quot;Deal Value&quot;,         // Q
+    &quot;Ad Campaign&quot;,        // R
+    &quot;Ad Set&quot;,             // S
+    &quot;Ad Creative&quot;,        // T
+    &quot;Metadata (JSON)&quot;,    // U
+    &quot;Event ID&quot;,           // V
+    &quot;Date Only&quot;           // W — helper for COUNTIFS
+  ];
+
+  styleColumnHeaders(sheet, 1, headers);
+
+  // Format columns
+  sheet.getRange(&quot;A2:A&quot; + MAX_LEAD_ROWS).setNumberFormat(&quot;yyyy-mm-dd hh:mm:ss&quot;);
+  sheet.getRange(&quot;Q2:Q&quot; + MAX_LEAD_ROWS).setNumberFormat(&quot;#,##0.00&quot;);
+  sheet.getRange(&quot;W2:W&quot; + MAX_LEAD_ROWS).setNumberFormat(&quot;yyyy-mm-dd&quot;);
+
+  // Data validation for Event Type
+  var eventTypes = [
+    &quot;page_view&quot;, &quot;optin&quot;, &quot;vsl_page_view&quot;, &quot;vsl_play&quot;,
+    &quot;vsl_milestone_25&quot;, &quot;vsl_milestone_50&quot;, &quot;vsl_milestone_75&quot;, &quot;vsl_milestone_100&quot;,
+    &quot;cta_click&quot;, &quot;application_view&quot;, &quot;application_submit&quot;,
+    &quot;booking_page_view&quot;, &quot;booking_confirmed&quot;, &quot;booking_cancelled&quot;, &quot;booking_rescheduled&quot;,
+    &quot;show&quot;, &quot;no_show&quot;, &quot;close&quot;, &quot;purchase&quot;
+  ];
+  var eventRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(eventTypes, true)
+    .setAllowInvalid(true)
+    .build();
+  sheet.getRange(&quot;C2:C&quot; + MAX_LEAD_ROWS).setDataValidation(eventRule);
+
+  setColWidths(sheet, [160, 200, 140, 100, 100, 100, 120, 100, 100, 160, 140, 120, 200, 100, 100, 80, 100, 160, 140, 140, 250, 200, 100]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 📊 DASHBOARD
+// ─────────────────────────────────────────────
+function buildDashboard(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;📊 DASHBOARD&quot;);
+  sheet.setTabColor(COLOURS.tabBlue);
+  sheet.setFrozenRows(1);
+
+  var totalCols = 10;
+
+  // Row 1: Title
+  styleHeader(sheet, 1, 1, totalCols, &quot;📊 VSL FUNNEL TRACKER — MASTER DASHBOARD&quot;);
+
+  // Row 2: Subtitle
+  sheet.getRange(2, 1, 1, totalCols).merge()
+    .setValue(&quot;Client: =IFERROR(&#x27;⚙️ CONFIG&#x27;!B4,\&quot;Not configured\&quot;)  |  Last Updated: &quot; + new Date().toLocaleDateString(&quot;en-GB&quot;))
+    .setBackground(COLOURS.sectionBg)
+    .setFontSize(9)
+    .setHorizontalAlignment(&quot;center&quot;);
+
+  // ── SECTION: KEY METRICS ──
+  styleSubHeader(sheet, 4, 1, totalCols, &quot;  KEY PERFORMANCE INDICATORS&quot;);
+
+  var metricHeaders = [&quot;Metric&quot;, &quot;Actual&quot;, &quot;Benchmark&quot;, &quot;Status&quot;, &quot;Notes&quot;];
+  styleColumnHeaders(sheet, 5, metricHeaders);
+
+  var metrics = [
+    [&quot;Opt-in Rate&quot;,          &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D6&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E6&quot;],
+    [&quot;VSL Play Rate&quot;,        &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D8&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E8&quot;],
+    [&quot;VSL Completion Rate&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D9&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E9&quot;],
+    [&quot;Application Rate&quot;,     &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D11&quot;, &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E11&quot;],
+    [&quot;Booking Rate&quot;,         &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D12&quot;, &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E12&quot;],
+    [&quot;Show Rate&quot;,            &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D13&quot;, &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E13&quot;],
+    [&quot;Close Rate&quot;,           &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D14&quot;, &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E14&quot;],
+    [&quot;ROAS&quot;,                 &quot;=IFERROR(&#x27;💰 REVENUE METRICS&#x27;!B5/&#x27;📢 AD METRICS&#x27;!I53,\&quot;\&quot;)&quot;, &quot;=&#x27;📈 BENCHMARKS&#x27;!C40&quot;]
+  ];
+
+  for (var i = 0; i &lt; metrics.length; i++) {
+    var r = 6 + i;
+    sheet.getRange(r, 1).setValue(metrics[i][0]).setFontWeight(&quot;bold&quot;);
+    sheet.getRange(r, 2).setFormula(metrics[i][1]).setNumberFormat(&quot;0.0%&quot;).setHorizontalAlignment(&quot;center&quot;);
+    sheet.getRange(r, 3).setFormula(metrics[i][2]).setNumberFormat(&quot;0.0%&quot;).setHorizontalAlignment(&quot;center&quot;);
+    var statusFormula = &#x27;=IF(B&#x27; + r + &#x27;=&quot;&quot;,&quot;--&quot;,IF(B&#x27; + r + &#x27;&gt;=C&#x27; + r + &#x27;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; On Track&quot;,IF(B&#x27; + r + &#x27;&gt;=C&#x27; + r + &#x27;*0.8,&quot;&#x27; + String.fromCharCode(9888) + String.fromCharCode(65039) + &#x27; Watch&quot;,&quot;&#x27; + String.fromCharCode(128308) + &#x27; Danger&quot;)))&#x27;;
+    sheet.getRange(r, 4).setFormula(statusFormula).setHorizontalAlignment(&quot;center&quot;);
+    sheet.getRange(r, 5).setBackground(COLOURS.inputBg);
+    addBorders(sheet, r, 1, 1, 5);
+  }
+
+  // ROAS row — different format
+  sheet.getRange(13, 2).setNumberFormat(&quot;0.0x&quot;);
+  sheet.getRange(13, 3).setNumberFormat(&quot;0.0x&quot;);
+
+  addRAGConditionalFormatting(sheet, sheet.getRange(&quot;D6:D13&quot;));
+
+  // ── SECTION: FUNNEL FLOW VISUAL ──
+  styleSubHeader(sheet, 15, 1, totalCols, &quot;  FUNNEL FLOW (Visual Summary)&quot;);
+
+  var flowHeaders = [&quot;Stage&quot;, &quot;Count&quot;, &quot;Conversion Rate&quot;, &quot;Benchmark&quot;, &quot;Status&quot;];
+  styleColumnHeaders(sheet, 16, flowHeaders);
+
+  var flowStages = [
+    [&quot;Ad Impressions&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B3&quot;],
+    [&quot;Ad Clicks&quot;,       &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B4&quot;],
+    [&quot;Landing Page&quot;,    &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B5&quot;],
+    [&quot;Opt-ins&quot;,         &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B6&quot;],
+    [&quot;VSL Page Views&quot;,  &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B7&quot;],
+    [&quot;VSL Plays&quot;,       &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B8&quot;],
+    [&quot;VSL Completions&quot;, &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B9&quot;],
+    [&quot;CTA Clicks&quot;,      &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B10&quot;],
+    [&quot;Applications&quot;,    &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B11&quot;],
+    [&quot;Bookings&quot;,        &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B12&quot;],
+    [&quot;Shows&quot;,           &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B13&quot;],
+    [&quot;CLOSED&quot;,          &quot;=&#x27;🎯 FUNNEL FLOW&#x27;!B14&quot;]
+  ];
+
+  for (var j = 0; j &lt; flowStages.length; j++) {
+    var fr = 17 + j;
+    var arrow = j === 0 ? &quot;&quot; : &quot;  -&gt; &quot;;
+    sheet.getRange(fr, 1).setValue(arrow + flowStages[j][0]).setFontWeight(&quot;bold&quot;);
+    sheet.getRange(fr, 2).setFormula(flowStages[j][1]).setNumberFormat(&quot;#,##0&quot;);
+    var ffRow = 3 + j;
+    sheet.getRange(fr, 3).setFormula(&quot;=&#x27;🎯 FUNNEL FLOW&#x27;!D&quot; + ffRow).setNumberFormat(&quot;0.0%&quot;);
+    sheet.getRange(fr, 4).setFormula(&quot;=&#x27;🎯 FUNNEL FLOW&#x27;!E&quot; + ffRow).setNumberFormat(&quot;0.0%&quot;);
+    sheet.getRange(fr, 5).setFormula(&quot;=&#x27;🎯 FUNNEL FLOW&#x27;!F&quot; + ffRow).setHorizontalAlignment(&quot;center&quot;);
+  }
+
+  addRAGConditionalFormatting(sheet, sheet.getRange(&quot;E17:E28&quot;));
+
+  // ── SECTION: THIS WEEK AT A GLANCE ──
+  styleSubHeader(sheet, 30, 1, totalCols, &quot;  THIS WEEK AT A GLANCE&quot;);
+
+  var weekHeaders = [&quot;Metric&quot;, &quot;This Week&quot;, &quot;Last Week&quot;, &quot;Change&quot;];
+  styleColumnHeaders(sheet, 31, weekHeaders);
+
+  var weekMetrics = [&quot;New Leads&quot;, &quot;VSL Plays&quot;, &quot;Applications&quot;, &quot;Calls Booked&quot;, &quot;Calls Showed&quot;, &quot;Sales&quot;, &quot;Revenue&quot;, &quot;Ad Spend&quot;, &quot;CPL&quot;, &quot;ROAS&quot;];
+  for (var k = 0; k &lt; weekMetrics.length; k++) {
+    var wr = 32 + k;
+    sheet.getRange(wr, 1).setValue(weekMetrics[k]);
+    sheet.getRange(wr, 2).setBackground(COLOURS.inputBg);
+    sheet.getRange(wr, 3).setBackground(COLOURS.inputBg);
+    sheet.getRange(wr, 4).setFormula(&#x27;=IF(OR(B&#x27; + wr + &#x27;=&quot;&quot;,C&#x27; + wr + &#x27;=&quot;&quot;),&quot;--&quot;,IF(C&#x27; + wr + &#x27;=0,&quot;--&quot;,TEXT((B&#x27; + wr + &#x27;-C&#x27; + wr + &#x27;)/C&#x27; + wr + &#x27;,&quot;0.0%&quot;)))&#x27;);
+  }
+
+  // ── SECTION: REVENUE ATTRIBUTION ──
+  styleSubHeader(sheet, 43, 1, totalCols, &quot;  TOP CAMPAIGNS BY REVENUE (from LEAD JOURNEYS attribution)&quot;);
+
+  styleColumnHeaders(sheet, 44, [&quot;Rank&quot;, &quot;Campaign&quot;, &quot;Leads&quot;, &quot;Closes&quot;, &quot;Revenue&quot;, &quot;Close Rate&quot;]);
+
+  for (var ra = 0; ra &lt; 5; ra++) {
+    var raRow = 45 + ra;
+    sheet.getRange(raRow, 1).setValue(ra + 1);
+    sheet.getRange(raRow, 2, 1, 5).setBackground(COLOURS.inputBg);
+  }
+  sheet.getRange(45, 2).setValue(&quot;(Populate from LEAD JOURNEYS once data flows)&quot;).setFontStyle(&quot;italic&quot;).setFontColor(&quot;#999999&quot;);
+
+  setColWidths(sheet, [180, 120, 120, 140, 160, 120, 120, 120, 120, 120]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 📢 AD METRICS
+// ─────────────────────────────────────────────
+function buildAdMetrics(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;📢 AD METRICS&quot;);
+  sheet.setTabColor(COLOURS.tabOrange);
+  sheet.setFrozenRows(2);
+
+  styleHeader(sheet, 1, 1, 15, &quot;📢 AD METRICS — Multi-Platform Paid Traffic Performance&quot;);
+
+  var headers = [
+    &quot;Date&quot;,             // A
+    &quot;Platform&quot;,         // B
+    &quot;Campaign Name&quot;,    // C
+    &quot;Ad Set / Ad Group&quot;,// D
+    &quot;Ad Name&quot;,          // E
+    &quot;Impressions&quot;,      // F
+    &quot;Clicks&quot;,           // G
+    &quot;CTR (%)&quot;,          // H
+    &quot;Ad Spend&quot;,         // I
+    &quot;Leads Generated&quot;,  // J
+    &quot;CPL&quot;,              // K
+    &quot;CPA&quot;,              // L
+    &quot;ROAS&quot;,             // M
+    &quot;Data Source&quot;,       // N
+    &quot;Notes&quot;             // O
+  ];
+  styleColumnHeaders(sheet, 2, headers);
+
+  var numInputRows = 50;
+  setInputRows(sheet, 3, numInputRows, 1, 15);
+
+  // Platform data validation
+  var platformRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;meta&quot;, &quot;youtube&quot;, &quot;google&quot;, &quot;tiktok&quot;], true)
+    .setAllowInvalid(true)
+    .build();
+  sheet.getRange(&quot;B3:B&quot; + (2 + numInputRows)).setDataValidation(platformRule);
+
+  // Data Source validation
+  var sourceRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList([&quot;api_sync&quot;, &quot;csv_import&quot;, &quot;manual&quot;], true)
+    .setAllowInvalid(true)
+    .build();
+  sheet.getRange(&quot;N3:N&quot; + (2 + numInputRows)).setDataValidation(sourceRule);
+
+  // Formulas for calculated columns
+  for (var i = 3; i &lt; 3 + numInputRows; i++) {
+    // CTR = Clicks / Impressions
+    sheet.getRange(i, 8).setFormula(&#x27;=IF(OR(G&#x27; + i + &#x27;=&quot;&quot;,F&#x27; + i + &#x27;=&quot;&quot;,F&#x27; + i + &#x27;=0),&quot;&quot;,G&#x27; + i + &#x27;/F&#x27; + i + &#x27;)&#x27;).setNumberFormat(&quot;0.00%&quot;);
+    // CPL = Spend / Leads
+    sheet.getRange(i, 11).setFormula(&#x27;=IF(OR(I&#x27; + i + &#x27;=&quot;&quot;,J&#x27; + i + &#x27;=&quot;&quot;,J&#x27; + i + &#x27;=0),&quot;&quot;,I&#x27; + i + &#x27;/J&#x27; + i + &#x27;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+    // CPA and ROAS left blank (populated when close data available)
+    sheet.getRange(i, 1).setNumberFormat(&quot;yyyy-mm-dd&quot;);
+    sheet.getRange(i, 9).setNumberFormat(&quot;#,##0.00&quot;);
+    sheet.getRange(i, 6).setNumberFormat(&quot;#,##0&quot;);
+    sheet.getRange(i, 7).setNumberFormat(&quot;#,##0&quot;);
+    sheet.getRange(i, 10).setNumberFormat(&quot;#,##0&quot;);
+  }
+
+  // Totals row
+  var totalsRow = 3 + numInputRows;
+  sheet.getRange(totalsRow, 1).setValue(&quot;TOTALS&quot;).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(totalsRow, 1, 1, 15).setBackground(COLOURS.totalsBg).setFontWeight(&quot;bold&quot;);
+
+  var sumCols = [6, 7, 9, 10];
+  for (var sc = 0; sc &lt; sumCols.length; sc++) {
+    var col = sumCols[sc];
+    var letter = String.fromCharCode(64 + col);
+    sheet.getRange(totalsRow, col).setFormula(&#x27;=SUM(&#x27; + letter + &#x27;3:&#x27; + letter + (totalsRow - 1) + &#x27;)&#x27;);
+  }
+  sheet.getRange(totalsRow, 8).setFormula(&#x27;=IF(F&#x27; + totalsRow + &#x27;=0,&quot;&quot;,G&#x27; + totalsRow + &#x27;/F&#x27; + totalsRow + &#x27;)&#x27;).setNumberFormat(&quot;0.00%&quot;);
+  sheet.getRange(totalsRow, 11).setFormula(&#x27;=IF(J&#x27; + totalsRow + &#x27;=0,&quot;&quot;,I&#x27; + totalsRow + &#x27;/J&#x27; + totalsRow + &#x27;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+
+  setColWidths(sheet, [100, 80, 200, 160, 160, 110, 80, 80, 110, 110, 90, 90, 80, 90, 200]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 🎯 FUNNEL FLOW
+// ─────────────────────────────────────────────
+function buildFunnelFlow(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;🎯 FUNNEL FLOW&quot;);
+  sheet.setTabColor(COLOURS.tabGreen);
+  sheet.setFrozenRows(2);
+
+  styleHeader(sheet, 1, 1, 7, &quot;🎯 FUNNEL FLOW — Auto-Calculated from Lead Journeys&quot;);
+
+  var headers = [&quot;Funnel Stage&quot;, &quot;Count&quot;, &quot;Previous Stage&quot;, &quot;Conversion Rate&quot;, &quot;Benchmark&quot;, &quot;Status&quot;, &quot;Notes&quot;];
+  styleColumnHeaders(sheet, 2, headers);
+
+  // Row data: stage name, count formula, benchmark lookup key
+  var stages = [
+    {
+      name: &quot;1. Ad Impressions&quot;,
+      count: &quot;=IFERROR(SUM(&#x27;📢 AD METRICS&#x27;!F3:F999),0)&quot;,
+      prev: &quot;&quot;,
+      benchKey: &quot;Ad CTR&quot;
+    },
+    {
+      name: &quot;2. Ad Clicks&quot;,
+      count: &quot;=IFERROR(SUM(&#x27;📢 AD METRICS&#x27;!G3:G999),0)&quot;,
+      prev: &quot;B3&quot;,
+      benchKey: &quot;Ad CTR&quot;
+    },
+    {
+      name: &quot;3. Landing Page Views&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;page_view\&quot;)&quot;,
+      prev: &quot;B4&quot;,
+      benchKey: &quot;Click to LP Rate&quot;
+    },
+    {
+      name: &quot;4. Opt-ins&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;optin\&quot;)&quot;,
+      prev: &quot;B5&quot;,
+      benchKey: &quot;Opt-in Rate&quot;
+    },
+    {
+      name: &quot;5. VSL Page Views&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;vsl_page_view\&quot;)&quot;,
+      prev: &quot;B6&quot;,
+      benchKey: &quot;Opt-in to VSL Rate&quot;
+    },
+    {
+      name: &quot;6. VSL Plays&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;vsl_play\&quot;)&quot;,
+      prev: &quot;B7&quot;,
+      benchKey: &quot;VSL Play Rate&quot;
+    },
+    {
+      name: &quot;7. VSL Completions&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;vsl_milestone_100\&quot;)&quot;,
+      prev: &quot;B8&quot;,
+      benchKey: &quot;VSL Completion Rate&quot;
+    },
+    {
+      name: &quot;8. CTA Clicks&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;cta_click\&quot;)&quot;,
+      prev: &quot;B9&quot;,
+      benchKey: &quot;CTA Click Rate&quot;
+    },
+    {
+      name: &quot;9. Applications&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;application_submit\&quot;)&quot;,
+      prev: &quot;B10&quot;,
+      benchKey: &quot;Application Rate&quot;
+    },
+    {
+      name: &quot;10. Bookings&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;booking_confirmed\&quot;)&quot;,
+      prev: &quot;B11&quot;,
+      benchKey: &quot;Booking Rate&quot;
+    },
+    {
+      name: &quot;11. Shows&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;show\&quot;)&quot;,
+      prev: &quot;B12&quot;,
+      benchKey: &quot;Show Rate&quot;
+    },
+    {
+      name: &quot;12. Closes&quot;,
+      count: &quot;=COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;close\&quot;)&quot;,
+      prev: &quot;B13&quot;,
+      benchKey: &quot;Close Rate&quot;
+    }
+  ];
+
+  for (var i = 0; i &lt; stages.length; i++) {
+    var r = 3 + i;
+    var s = stages[i];
+    sheet.getRange(r, 1).setValue(s.name).setFontWeight(&quot;bold&quot;);
+    sheet.getRange(r, 2).setFormula(s.count).setNumberFormat(&quot;#,##0&quot;);
+
+    // Previous stage count (for conversion rate calc)
+    if (s.prev) {
+      sheet.getRange(r, 3).setFormula(&quot;=&quot; + s.prev).setNumberFormat(&quot;#,##0&quot;).setFontColor(&quot;#999999&quot;);
+    } else {
+      sheet.getRange(r, 3).setValue(&quot;--&quot;).setHorizontalAlignment(&quot;center&quot;);
+    }
+
+    // Conversion rate
+    if (s.prev) {
+      sheet.getRange(r, 4).setFormula(&#x27;=IF(OR(C&#x27; + r + &#x27;=&quot;&quot;,C&#x27; + r + &#x27;=0,B&#x27; + r + &#x27;=&quot;&quot;),&quot;&quot;,B&#x27; + r + &#x27;/C&#x27; + r + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+    } else {
+      sheet.getRange(r, 4).setValue(&quot;--&quot;).setHorizontalAlignment(&quot;center&quot;);
+    }
+
+    // Dynamic benchmark from BENCHMARKS tab
+    // Using VLOOKUP with concatenated key: benchmark_name &amp; price_tier
+    sheet.getRange(r, 5).setFormula(
+      &#x27;=IFERROR(VLOOKUP(&quot;&#x27; + s.benchKey + &#x27;&quot;&amp;\&#x27;⚙️ CONFIG\&#x27;!B6,\&#x27;📈 BENCHMARKS\&#x27;!E:F,2,FALSE),&quot;&quot;)&#x27;
+    ).setNumberFormat(&quot;0.0%&quot;);
+
+    // RAG Status
+    sheet.getRange(r, 6).setFormula(
+      &#x27;=IF(D&#x27; + r + &#x27;=&quot;&quot;,&quot;--&quot;,IF(E&#x27; + r + &#x27;=&quot;&quot;,&quot;--&quot;,IF(D&#x27; + r + &#x27;&gt;=E&#x27; + r + &#x27;,&quot;&#x27; +
+      String.fromCharCode(9989) + &#x27; On Track&quot;,IF(D&#x27; + r + &#x27;&gt;=E&#x27; + r + &#x27;*0.8,&quot;&#x27; +
+      String.fromCharCode(9888) + String.fromCharCode(65039) + &#x27; Watch&quot;,IF(D&#x27; + r + &#x27;&gt;=E&#x27; + r + &#x27;*0.6,&quot;&#x27; +
+      String.fromCharCode(128308) + &#x27; Danger&quot;,&quot;&#x27; +
+      String.fromCharCode(10060) + &#x27; Critical&quot;)))))&#x27;
+    ).setHorizontalAlignment(&quot;center&quot;);
+
+    sheet.getRange(r, 7).setBackground(COLOURS.inputBg);
+    addBorders(sheet, r, 1, 1, 7);
+  }
+
+  addRAGConditionalFormatting(sheet, sheet.getRange(&quot;F3:F14&quot;));
+
+  setColWidths(sheet, [200, 100, 120, 130, 110, 140, 200]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 📅 DAILY LOG
+// ─────────────────────────────────────────────
+function buildDailyLog(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;📅 DAILY LOG&quot;);
+  sheet.setTabColor(COLOURS.tabTeal);
+  sheet.setFrozenRows(2);
+
+  styleHeader(sheet, 1, 1, 12, &quot;📅 DAILY LOG — Auto-Calculated from Lead Journeys by Date&quot;);
+
+  var headers = [
+    &quot;Date&quot;,                // A
+    &quot;New Leads\n(Opt-ins)&quot;,// B
+    &quot;VSL Plays&quot;,           // C
+    &quot;VSL\nCompletions&quot;,    // D
+    &quot;Applications&quot;,        // E
+    &quot;Bookings&quot;,            // F
+    &quot;Shows&quot;,               // G
+    &quot;Closes&quot;,              // H
+    &quot;Revenue&quot;,             // I
+    &quot;Ad Spend&quot;,            // J
+    &quot;CPL&quot;,                 // K
+    &quot;Notes&quot;                // L
+  ];
+  styleColumnHeaders(sheet, 2, headers);
+
+  var ljTab = &quot;&#x27;👤 LEAD JOURNEYS&#x27;&quot;;
+  var maxR = MAX_LEAD_ROWS;
+
+  // Pre-populate 90 days of date rows with COUNTIFS formulas
+  var today = new Date();
+  var rowIdx = 3;
+
+  for (var d = 0; d &lt; DAILY_LOG_DAYS; d++) {
+    // Weekly subtotal every 7 days
+    if (d &gt; 0 &amp;&amp; d % 7 === 0) {
+      var weekNum = Math.floor(d / 7);
+      var weekStart = rowIdx - 7;
+      var weekEnd = rowIdx - 1;
+      sheet.getRange(rowIdx, 1).setValue(&quot;Week &quot; + weekNum + &quot; Total&quot;).setFontWeight(&quot;bold&quot;);
+      sheet.getRange(rowIdx, 1, 1, 12).setBackground(COLOURS.totalsBg).setFontWeight(&quot;bold&quot;);
+
+      for (var wc = 2; wc &lt;= 10; wc++) {
+        var wl = String.fromCharCode(64 + wc);
+        sheet.getRange(rowIdx, wc).setFormula(&#x27;=SUM(&#x27; + wl + weekStart + &#x27;:&#x27; + wl + weekEnd + &#x27;)&#x27;);
+      }
+      // CPL for week
+      sheet.getRange(rowIdx, 11).setFormula(&#x27;=IF(B&#x27; + rowIdx + &#x27;=0,&quot;&quot;,J&#x27; + rowIdx + &#x27;/B&#x27; + rowIdx + &#x27;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+      rowIdx++;
+    }
+
+    var date = new Date(today);
+    date.setDate(date.getDate() - (DAILY_LOG_DAYS - 1 - d));
+    var dateStr = Utilities.formatDate(date, Session.getScriptTimeZone(), &quot;yyyy-MM-dd&quot;);
+
+    sheet.getRange(rowIdx, 1).setValue(date).setNumberFormat(&quot;yyyy-mm-dd&quot;);
+
+    // COUNTIFS formulas for each event type by date
+    var eventMap = {
+      2: &quot;optin&quot;,
+      3: &quot;vsl_play&quot;,
+      4: &quot;vsl_milestone_100&quot;,
+      5: &quot;application_submit&quot;,
+      6: &quot;booking_confirmed&quot;,
+      7: &quot;show&quot;,
+      8: &quot;close&quot;
+    };
+
+    for (var col in eventMap) {
+      var c = parseInt(col);
+      var evt = eventMap[col];
+      sheet.getRange(rowIdx, c).setFormula(
+        &#x27;=COUNTIFS(&#x27; + ljTab + &#x27;!C2:C&#x27; + maxR + &#x27;,&quot;&#x27; + evt + &#x27;&quot;,&#x27; + ljTab + &#x27;!W2:W&#x27; + maxR + &#x27;,&quot;&#x27; + dateStr + &#x27;&quot;)&#x27;
+      ).setNumberFormat(&quot;#,##0&quot;);
+    }
+
+    // Revenue = SUMIFS for close events on this date
+    sheet.getRange(rowIdx, 9).setFormula(
+      &#x27;=SUMIFS(&#x27; + ljTab + &#x27;!Q2:Q&#x27; + maxR + &#x27;,&#x27; + ljTab + &#x27;!C2:C&#x27; + maxR + &#x27;,&quot;close&quot;,&#x27; + ljTab + &#x27;!W2:W&#x27; + maxR + &#x27;,&quot;&#x27; + dateStr + &#x27;&quot;)&#x27;
+    ).setNumberFormat(&quot;#,##0.00&quot;);
+
+    // Ad Spend from AD METRICS
+    sheet.getRange(rowIdx, 10).setFormula(
+      &quot;=SUMIFS(&#x27;📢 AD METRICS&#x27;!I3:I999,&#x27;📢 AD METRICS&#x27;!A3:A999,A&quot; + rowIdx + &quot;)&quot;
+    ).setNumberFormat(&quot;#,##0.00&quot;);
+
+    // CPL
+    sheet.getRange(rowIdx, 11).setFormula(&#x27;=IF(B&#x27; + rowIdx + &#x27;=0,&quot;&quot;,J&#x27; + rowIdx + &#x27;/B&#x27; + rowIdx + &#x27;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+
+    sheet.getRange(rowIdx, 12).setBackground(COLOURS.inputBg);
+    rowIdx++;
+  }
+
+  // Grand total row
+  sheet.getRange(rowIdx, 1).setValue(&quot;GRAND TOTAL&quot;).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(rowIdx, 1, 1, 12).setBackground(COLOURS.headerBg).setFontColor(COLOURS.headerText).setFontWeight(&quot;bold&quot;);
+  for (var gc = 2; gc &lt;= 10; gc++) {
+    var gl = String.fromCharCode(64 + gc);
+    sheet.getRange(rowIdx, gc).setFormula(&#x27;=SUM(&#x27; + gl + &#x27;3:&#x27; + gl + (rowIdx - 1) + &#x27;)&#x27;);
+  }
+  sheet.getRange(rowIdx, 11).setFormula(&#x27;=IF(B&#x27; + rowIdx + &#x27;=0,&quot;&quot;,J&#x27; + rowIdx + &#x27;/B&#x27; + rowIdx + &#x27;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+
+  setColWidths(sheet, [100, 90, 90, 100, 110, 90, 80, 80, 110, 110, 90, 200]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 🎥 VSL ANALYTICS
+// ─────────────────────────────────────────────
+function buildVSLAnalytics(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;🎥 VSL ANALYTICS&quot;);
+  sheet.setTabColor(COLOURS.tabPurple);
+  sheet.setFrozenRows(2);
+
+  var totalCols = 11;
+  styleHeader(sheet, 1, 1, totalCols, &quot;🎥 VSL ANALYTICS — Video Performance &amp; Watch Time&quot;);
+
+  // ── AGGREGATE SUMMARY (top) ──
+  styleSubHeader(sheet, 2, 1, totalCols, &quot;  OVERALL VIDEO METRICS&quot;);
+
+  var summaryLabels = [
+    &quot;Total VSL Page Views&quot;, &quot;Total Plays&quot;, &quot;Play Rate&quot;,
+    &quot;25% Milestone&quot;, &quot;50% Milestone&quot;, &quot;75% Milestone&quot;, &quot;100% (Complete)&quot;,
+    &quot;Completion Rate&quot;, &quot;CTA Clicks&quot;, &quot;CTA Rate&quot;
+  ];
+  styleColumnHeaders(sheet, 3, summaryLabels);
+
+  var ljTab = &quot;&#x27;👤 LEAD JOURNEYS&#x27;&quot;;
+  var maxR = MAX_LEAD_ROWS;
+
+  // Summary formulas row
+  sheet.getRange(4, 1).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_page_view\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 2).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_play\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 3).setFormula(&#x27;=IF(A4=0,&quot;&quot;,B4/A4)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  sheet.getRange(4, 4).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_milestone_25\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 5).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_milestone_50\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 6).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_milestone_75\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 7).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;vsl_milestone_100\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 8).setFormula(&#x27;=IF(B4=0,&quot;&quot;,G4/B4)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  sheet.getRange(4, 9).setFormula(&quot;=COUNTIFS(&quot; + ljTab + &quot;!C2:C&quot; + maxR + &quot;,\&quot;cta_click\&quot;)&quot;).setNumberFormat(&quot;#,##0&quot;);
+  sheet.getRange(4, 10).setFormula(&#x27;=IF(A4=0,&quot;&quot;,I4/A4)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+
+  sheet.getRange(4, 1, 1, 10).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12).setHorizontalAlignment(&quot;center&quot;);
+  sheet.setRowHeight(4, 36);
+
+  // ── DROP-OFF ANALYSIS ──
+  styleSubHeader(sheet, 6, 1, totalCols, &quot;  VIDEO DROP-OFF FUNNEL (% of plays that reached each milestone)&quot;);
+
+  var dropHeaders = [&quot;Milestone&quot;, &quot;Count&quot;, &quot;% of Plays&quot;, &quot;Drop-off from Previous&quot;];
+  styleColumnHeaders(sheet, 7, dropHeaders);
+
+  var milestones = [
+    [&quot;Plays (Start)&quot;, &quot;=B4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,1)&quot;, &quot;&quot;],
+    [&quot;25% Watched&quot;, &quot;=D4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,D4/B4)&quot;, &quot;=IF(B4=0,\&quot;\&quot;,1-C9)&quot;],
+    [&quot;50% Watched&quot;, &quot;=E4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,E4/B4)&quot;, &quot;=IF(B4=0,\&quot;\&quot;,C9-C10)&quot;],
+    [&quot;75% Watched&quot;, &quot;=F4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,F4/B4)&quot;, &quot;=IF(B4=0,\&quot;\&quot;,C10-C11)&quot;],
+    [&quot;100% Complete&quot;, &quot;=G4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,G4/B4)&quot;, &quot;=IF(B4=0,\&quot;\&quot;,C11-C12)&quot;],
+    [&quot;CTA Click&quot;, &quot;=I4&quot;, &quot;=IF(B4=0,\&quot;\&quot;,I4/B4)&quot;, &quot;=IF(B4=0,\&quot;\&quot;,C12-C13)&quot;]
+  ];
+
+  for (var m = 0; m &lt; milestones.length; m++) {
+    var mr = 8 + m;
+    sheet.getRange(mr, 1).setValue(milestones[m][0]).setFontWeight(&quot;bold&quot;);
+    sheet.getRange(mr, 2).setFormula(milestones[m][1]).setNumberFormat(&quot;#,##0&quot;);
+    sheet.getRange(mr, 3).setFormula(milestones[m][2]).setNumberFormat(&quot;0.0%&quot;);
+    if (milestones[m][3]) {
+      sheet.getRange(mr, 4).setFormula(milestones[m][3]).setNumberFormat(&quot;0.0%&quot;);
+    }
+    addBorders(sheet, mr, 1, 1, 4);
+  }
+
+  // ── DAILY VSL DATA ──
+  styleSubHeader(sheet, 16, 1, totalCols, &quot;  DAILY VSL METRICS (auto-calculated from Lead Journeys)&quot;);
+
+  var dailyHeaders = [
+    &quot;Date&quot;, &quot;Page Views&quot;, &quot;Plays&quot;, &quot;Play Rate&quot;,
+    &quot;25%&quot;, &quot;50%&quot;, &quot;75%&quot;, &quot;100%&quot;,
+    &quot;Completion Rate&quot;, &quot;CTA Clicks&quot;, &quot;CTA Rate&quot;
+  ];
+  styleColumnHeaders(sheet, 17, dailyHeaders);
+
+  var today = new Date();
+  for (var dd = 0; dd &lt; 30; dd++) {
+    var dr = 18 + dd;
+    var dDate = new Date(today);
+    dDate.setDate(dDate.getDate() - (29 - dd));
+    var dStr = Utilities.formatDate(dDate, Session.getScriptTimeZone(), &quot;yyyy-MM-dd&quot;);
+
+    sheet.getRange(dr, 1).setValue(dDate).setNumberFormat(&quot;yyyy-mm-dd&quot;);
+
+    var vslEvents = [&quot;vsl_page_view&quot;, &quot;vsl_play&quot;, &quot;&quot;, &quot;vsl_milestone_25&quot;, &quot;vsl_milestone_50&quot;, &quot;vsl_milestone_75&quot;, &quot;vsl_milestone_100&quot;, &quot;&quot;, &quot;cta_click&quot;];
+    var colMap = [2, 3, 0, 5, 6, 7, 8, 0, 10];
+
+    for (var ve = 0; ve &lt; vslEvents.length; ve++) {
+      if (vslEvents[ve] === &quot;&quot;) continue;
+      var vc = colMap[ve];
+      sheet.getRange(dr, vc).setFormula(
+        &#x27;=COUNTIFS(&#x27; + ljTab + &#x27;!C2:C&#x27; + maxR + &#x27;,&quot;&#x27; + vslEvents[ve] + &#x27;&quot;,&#x27; + ljTab + &#x27;!W2:W&#x27; + maxR + &#x27;,&quot;&#x27; + dStr + &#x27;&quot;)&#x27;
+      ).setNumberFormat(&quot;#,##0&quot;);
+    }
+
+    // Play Rate
+    sheet.getRange(dr, 4).setFormula(&#x27;=IF(B&#x27; + dr + &#x27;=0,&quot;&quot;,C&#x27; + dr + &#x27;/B&#x27; + dr + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+    // Completion Rate
+    sheet.getRange(dr, 9).setFormula(&#x27;=IF(C&#x27; + dr + &#x27;=0,&quot;&quot;,H&#x27; + dr + &#x27;/C&#x27; + dr + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+    // CTA Rate
+    sheet.getRange(dr, 11).setFormula(&#x27;=IF(B&#x27; + dr + &#x27;=0,&quot;&quot;,J&#x27; + dr + &#x27;/B&#x27; + dr + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  }
+
+  setColWidths(sheet, [100, 100, 80, 90, 70, 70, 70, 70, 110, 90, 90]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 📱 NURTURE METRICS
+// ─────────────────────────────────────────────
+function buildNurtureMetrics(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;📱 NURTURE METRICS&quot;);
+  sheet.setTabColor(COLOURS.tabPink);
+  sheet.setFrozenRows(1);
+
+  styleHeader(sheet, 1, 1, 10, &quot;📱 NURTURE METRICS — Email &amp; SMS/WhatsApp Performance&quot;);
+
+  // ── EMAIL SECTION ──
+  styleSubHeader(sheet, 2, 1, 10, &quot;  EMAIL METRICS&quot;);
+
+  var emailHeaders = [&quot;Date&quot;, &quot;Email Name / Subject&quot;, &quot;Sent&quot;, &quot;Delivered&quot;, &quot;Opens&quot;, &quot;Open Rate (%)&quot;, &quot;Clicks&quot;, &quot;CTR (%)&quot;, &quot;Unsubs&quot;, &quot;Notes&quot;];
+  styleColumnHeaders(sheet, 3, emailHeaders);
+
+  for (var i = 4; i &lt;= 33; i++) {
+    sheet.getRange(i, 1, 1, 10).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 6).setFormula(&#x27;=IF(OR(C&#x27; + i + &#x27;=&quot;&quot;,C&#x27; + i + &#x27;=0,E&#x27; + i + &#x27;=&quot;&quot;),&quot;&quot;,E&#x27; + i + &#x27;/C&#x27; + i + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+    sheet.getRange(i, 8).setFormula(&#x27;=IF(OR(E&#x27; + i + &#x27;=&quot;&quot;,E&#x27; + i + &#x27;=0,G&#x27; + i + &#x27;=&quot;&quot;),&quot;&quot;,G&#x27; + i + &#x27;/E&#x27; + i + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  }
+
+  // Email totals
+  sheet.getRange(34, 1).setValue(&quot;EMAIL TOTALS&quot;).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(34, 1, 1, 10).setBackground(COLOURS.totalsBg).setFontWeight(&quot;bold&quot;);
+  var emailSumCols = [3, 4, 5, 7, 9];
+  for (var ec = 0; ec &lt; emailSumCols.length; ec++) {
+    var ecc = emailSumCols[ec];
+    var el = String.fromCharCode(64 + ecc);
+    sheet.getRange(34, ecc).setFormula(&#x27;=SUM(&#x27; + el + &#x27;4:&#x27; + el + &#x27;33)&#x27;);
+  }
+  sheet.getRange(34, 6).setFormula(&#x27;=IF(C34=0,&quot;&quot;,E34/C34)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  sheet.getRange(34, 8).setFormula(&#x27;=IF(E34=0,&quot;&quot;,G34/E34)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+
+  // ── SMS / WHATSAPP SECTION ──
+  styleSubHeader(sheet, 36, 1, 10, &quot;  SMS / WHATSAPP METRICS&quot;);
+
+  var smsHeaders = [&quot;Date&quot;, &quot;Message Name / Type&quot;, &quot;Sent&quot;, &quot;Delivered&quot;, &quot;Replies&quot;, &quot;Reply Rate (%)&quot;, &quot;Clicks&quot;, &quot;CTR (%)&quot;, &quot;Opt-outs&quot;, &quot;Notes&quot;];
+  styleColumnHeaders(sheet, 37, smsHeaders);
+
+  for (var j = 38; j &lt;= 57; j++) {
+    sheet.getRange(j, 1, 1, 10).setBackground(COLOURS.inputBg);
+    sheet.getRange(j, 6).setFormula(&#x27;=IF(OR(C&#x27; + j + &#x27;=&quot;&quot;,C&#x27; + j + &#x27;=0,E&#x27; + j + &#x27;=&quot;&quot;),&quot;&quot;,E&#x27; + j + &#x27;/C&#x27; + j + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+    sheet.getRange(j, 8).setFormula(&#x27;=IF(OR(C&#x27; + j + &#x27;=&quot;&quot;,C&#x27; + j + &#x27;=0,G&#x27; + j + &#x27;=&quot;&quot;),&quot;&quot;,G&#x27; + j + &#x27;/C&#x27; + j + &#x27;)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  }
+
+  // SMS totals
+  sheet.getRange(58, 1).setValue(&quot;SMS TOTALS&quot;).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(58, 1, 1, 10).setBackground(COLOURS.totalsBg).setFontWeight(&quot;bold&quot;);
+  var smsSumCols = [3, 4, 5, 7, 9];
+  for (var sc2 = 0; sc2 &lt; smsSumCols.length; sc2++) {
+    var scc = smsSumCols[sc2];
+    var sl = String.fromCharCode(64 + scc);
+    sheet.getRange(58, scc).setFormula(&#x27;=SUM(&#x27; + sl + &#x27;38:&#x27; + sl + &#x27;57)&#x27;);
+  }
+  sheet.getRange(58, 6).setFormula(&#x27;=IF(C58=0,&quot;&quot;,E58/C58)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+  sheet.getRange(58, 8).setFormula(&#x27;=IF(C58=0,&quot;&quot;,G58/C58)&#x27;).setNumberFormat(&quot;0.0%&quot;);
+
+  setColWidths(sheet, [100, 200, 80, 90, 80, 110, 80, 90, 90, 200]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 💰 REVENUE METRICS
+// ─────────────────────────────────────────────
+function buildRevenueMetrics(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;💰 REVENUE METRICS&quot;);
+  sheet.setTabColor(COLOURS.tabGreen);
+  sheet.setFrozenRows(6);
+
+  styleHeader(sheet, 1, 1, 15, &quot;💰 REVENUE METRICS — Deal Tracking with Attribution&quot;);
+
+  // Summary section
+  styleSubHeader(sheet, 2, 1, 15, &quot;  REVENUE SUMMARY&quot;);
+
+  var summaryLabels = [&quot;Total Revenue&quot;, &quot;Total Clients&quot;, &quot;Avg Deal Size&quot;, &quot;ROAS&quot;, &quot;Revenue Per Lead&quot;, &quot;Est. LTV&quot;];
+  styleColumnHeaders(sheet, 3, summaryLabels);
+
+  // Summary formulas
+  sheet.getRange(4, 1).setFormula(&#x27;=IFERROR(SUM(J7:J506),&quot;&quot;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+  sheet.getRange(4, 2).setFormula(&#x27;=IFERROR(COUNTA(B7:B506),&quot;&quot;)&#x27;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+  sheet.getRange(4, 3).setFormula(&#x27;=IFERROR(IF(B4=0,&quot;&quot;,A4/B4),&quot;&quot;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+  sheet.getRange(4, 4).setFormula(&quot;=IFERROR(IF(SUM(&#x27;📢 AD METRICS&#x27;!I3:I999)=0,\&quot;\&quot;,A4/SUM(&#x27;📢 AD METRICS&#x27;!I3:I999)),\&quot;\&quot;)&quot;).setNumberFormat(&quot;0.0x&quot;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+  sheet.getRange(4, 5).setFormula(&quot;=IFERROR(IF(COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;optin\&quot;)=0,\&quot;\&quot;,A4/COUNTIFS(&#x27;👤 LEAD JOURNEYS&#x27;!C2:C&quot; + MAX_LEAD_ROWS + &quot;,\&quot;optin\&quot;)),\&quot;\&quot;)&quot;).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+  sheet.getRange(4, 6).setFormula(&#x27;=IFERROR(C4*1.5,&quot;&quot;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.goodBg).setFontWeight(&quot;bold&quot;).setFontSize(12);
+
+  // Labelled summary row
+  sheet.getRange(5, 1).setValue(&quot;Total Revenue&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+  sheet.getRange(5, 2).setValue(&quot;Total Clients&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+  sheet.getRange(5, 3).setValue(&quot;Avg Deal Size&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+  sheet.getRange(5, 4).setValue(&quot;ROAS&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+  sheet.getRange(5, 5).setValue(&quot;Rev / Lead&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+  sheet.getRange(5, 6).setValue(&quot;Est. LTV&quot;).setFontSize(8).setFontColor(&quot;#666666&quot;).setHorizontalAlignment(&quot;center&quot;);
+
+  // Deal tracking headers
+  var dealHeaders = [
+    &quot;Date&quot;,               // A
+    &quot;Client Name&quot;,        // B
+    &quot;Email&quot;,              // C
+    &quot;UTM Source\n(auto)&quot;, // D — auto-attributed
+    &quot;UTM Campaign\n(auto)&quot;, // E — auto-attributed
+    &quot;Ad Creative\n(auto)&quot;,  // F — auto-attributed
+    &quot;Offer / Programme&quot;,  // G
+    &quot;Price Point&quot;,        // H
+    &quot;Payment Plan&quot;,       // I
+    &quot;Total Value&quot;,        // J
+    &quot;Initial Payment&quot;,    // K
+    &quot;CPA&quot;,                // L
+    &quot;Lead Source&quot;,        // M
+    &quot;Referral / Notes&quot;,   // N
+    &quot;Attribution Notes&quot;   // O
+  ];
+  styleColumnHeaders(sheet, 6, dealHeaders);
+
+  // Input rows with attribution formulas
+  for (var i = 7; i &lt;= 106; i++) {
+    sheet.getRange(i, 1).setNumberFormat(&quot;yyyy-mm-dd&quot;).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 2).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 3).setBackground(COLOURS.inputBg);
+
+    // Auto-attribution: look up UTM Source from LEAD JOURNEYS by email
+    sheet.getRange(i, 4).setFormula(
+      &quot;=IFERROR(INDEX(&#x27;👤 LEAD JOURNEYS&#x27;!H:H,MATCH(C&quot; + i + &quot;,&#x27;👤 LEAD JOURNEYS&#x27;!B:B,0)),\&quot;\&quot;)&quot;
+    ).setFontColor(&quot;#1a73e8&quot;);
+
+    // Auto-attribution: UTM Campaign
+    sheet.getRange(i, 5).setFormula(
+      &quot;=IFERROR(INDEX(&#x27;👤 LEAD JOURNEYS&#x27;!J:J,MATCH(C&quot; + i + &quot;,&#x27;👤 LEAD JOURNEYS&#x27;!B:B,0)),\&quot;\&quot;)&quot;
+    ).setFontColor(&quot;#1a73e8&quot;);
+
+    // Auto-attribution: Ad Creative (UTM Content)
+    sheet.getRange(i, 6).setFormula(
+      &quot;=IFERROR(INDEX(&#x27;👤 LEAD JOURNEYS&#x27;!K:K,MATCH(C&quot; + i + &quot;,&#x27;👤 LEAD JOURNEYS&#x27;!B:B,0)),\&quot;\&quot;)&quot;
+    ).setFontColor(&quot;#1a73e8&quot;);
+
+    sheet.getRange(i, 7).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 8).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 9).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 10).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 11).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 12).setNumberFormat(&quot;#,##0.00&quot;).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 13).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 14).setBackground(COLOURS.inputBg);
+    sheet.getRange(i, 15).setBackground(COLOURS.inputBg);
+  }
+
+  // Totals row
+  var tRow = 107;
+  sheet.getRange(tRow, 1).setValue(&quot;TOTALS&quot;).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(tRow, 1, 1, 15).setBackground(COLOURS.totalsBg).setFontWeight(&quot;bold&quot;);
+  sheet.getRange(tRow, 8).setFormula(&#x27;=SUM(H7:H106)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+  sheet.getRange(tRow, 10).setFormula(&#x27;=SUM(J7:J106)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+  sheet.getRange(tRow, 11).setFormula(&#x27;=SUM(K7:K106)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+  sheet.getRange(tRow, 12).setFormula(&#x27;=IFERROR(AVERAGE(L7:L106),&quot;&quot;)&#x27;).setNumberFormat(&quot;#,##0.00&quot;);
+
+  setColWidths(sheet, [100, 160, 180, 100, 160, 140, 160, 100, 120, 110, 120, 90, 100, 180, 160]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 🔍 DISCREPANCY ANALYSER
+// ─────────────────────────────────────────────
+function buildDiscrepancyAnalyser(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;🔍 DISCREPANCY ANALYSER&quot;);
+  sheet.setTabColor(COLOURS.tabRed);
+  sheet.setFrozenRows(2);
+
+  styleHeader(sheet, 1, 1, 5, &quot;🔍 DISCREPANCY ANALYSER — Automated Bottleneck Detection&quot;);
+
+  var headers = [&quot;Discrepancy&quot;, &quot;Current Status&quot;, &quot;Signal / Diagnosis&quot;, &quot;Prescribed Action&quot;, &quot;Priority&quot;];
+  styleColumnHeaders(sheet, 2, headers);
+
+  var discrepancies = [
+    {
+      name: &quot;High LP views, low opt-in rate&quot;,
+      signal: &quot;Traffic is arriving but not opting in. Likely: weak headline, poor mobile rendering, slow page load, or wrong audience match.&quot;,
+      action: &quot;1. A/B test headline (problem vs outcome). 2. Check mobile responsiveness. 3. Run GTmetrix speed test. 4. Review audience targeting in ads.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D5=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D6=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!B5&gt;=50,\&#x27;🎯 FUNNEL FLOW\&#x27;!D6&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E6*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;HIGH&quot;
+    },
+    {
+      name: &quot;High opt-in, low VSL play rate&quot;,
+      signal: &quot;Leads opt in but don\&#x27;t play the video. Likely: page load issue, broken embed, above-fold experience post opt-in, no autoplay.&quot;,
+      action: &quot;1. Test page load speed. 2. Check video embed on mobile. 3. Add urgency above the fold. 4. A/B test autoplay vs click-to-play.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D6=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D8=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D6&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E6,\&#x27;🎯 FUNNEL FLOW\&#x27;!D8&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E8*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;HIGH&quot;
+    },
+    {
+      name: &quot;High play rate, low completion rate&quot;,
+      signal: &quot;Video is playing but viewers drop off before CTA. Likely: weak hook (first 60s), poor pacing, VSL too long.&quot;,
+      action: &quot;1. Review video heatmap data. 2. Strengthen first 60 seconds. 3. Test shorter cut. 4. Add retention hooks at drop-off points.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D8=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D9=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D8&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E8,\&#x27;🎯 FUNNEL FLOW\&#x27;!D9&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E9*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;HIGH&quot;
+    },
+    {
+      name: &quot;High completion, low application rate&quot;,
+      signal: &quot;Prospects watch but don\&#x27;t apply. Likely: weak offer stack, CTA placed too late, application form too long, missing price anchor.&quot;,
+      action: &quot;1. Rewrite offer stack with specificity. 2. Move CTA to 70% mark. 3. Shorten application to 5 questions. 4. Add social proof before CTA.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D9=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D11=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D9&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E9,\&#x27;🎯 FUNNEL FLOW\&#x27;!D11&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E11*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;MEDIUM&quot;
+    },
+    {
+      name: &quot;High application, low booking rate&quot;,
+      signal: &quot;Leads apply but don\&#x27;t book calls. Likely: too many steps to booking, no immediate redirect to calendar, confusing booking page.&quot;,
+      action: &quot;1. Auto-redirect to Calendly after application submit. 2. Add booking link in confirmation email. 3. SMS reminder to book.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D11=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D12=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D11&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E11,\&#x27;🎯 FUNNEL FLOW\&#x27;!D12&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E12*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;HIGH&quot;
+    },
+    {
+      name: &quot;High booking, low show rate&quot;,
+      signal: &quot;Calls booked but not showing up. Likely: booking window too long, weak confirmation sequence, no SMS reminders, low-intent applicants.&quot;,
+      action: &quot;1. Tighten booking window to 3-4 days max. 2. Add 3-step SMS reminder. 3. Add video on confirmation page. 4. Require phone number.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D12=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D13=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D12&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E12,\&#x27;🎯 FUNNEL FLOW\&#x27;!D13&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E13*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;HIGH&quot;
+    },
+    {
+      name: &quot;High show rate, low close rate&quot;,
+      signal: &quot;Calls happening but not converting. Likely: poor qualification, weak closer, wrong offer/price framing, prospects not pre-sold.&quot;,
+      action: &quot;1. Review last 10 call recordings. 2. Tighten qualification questions. 3. Implement pre-call video. 4. Revisit objection handling.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D13=&quot;&quot;,\&#x27;🎯 FUNNEL FLOW\&#x27;!D14=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D13&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E13,\&#x27;🎯 FUNNEL FLOW\&#x27;!D14&lt;\&#x27;🎯 FUNNEL FLOW\&#x27;!E14*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;CRITICAL&quot;
+    },
+    {
+      name: &quot;High close rate, low ROAS&quot;,
+      signal: &quot;Sales closing but ads not profitable. Likely: CPL too high, traffic quality poor, or LTV not captured in calculation.&quot;,
+      action: &quot;1. Audit CPL against deal size. 2. Pause lowest-performing ad sets. 3. Test new creatives and audiences. 4. Include payment plan revenue.&quot;,
+      status: &#x27;=IF(OR(\&#x27;🎯 FUNNEL FLOW\&#x27;!D14=&quot;&quot;,\&#x27;📊 DASHBOARD\&#x27;!B13=&quot;&quot;),&quot;&#x27; + String.fromCharCode(9898) + &#x27; No Data&quot;,IF(AND(\&#x27;🎯 FUNNEL FLOW\&#x27;!D14&gt;=\&#x27;🎯 FUNNEL FLOW\&#x27;!E14,\&#x27;📊 DASHBOARD\&#x27;!B13&lt;\&#x27;📊 DASHBOARD\&#x27;!C13*0.8),&quot;&#x27; + String.fromCharCode(128680) + &#x27; FLAGGED&quot;,&quot;&#x27; + String.fromCharCode(9989) + &#x27; Clear&quot;))&#x27;,
+      priority: &quot;CRITICAL&quot;
+    }
+  ];
+
+  for (var i = 0; i &lt; discrepancies.length; i++) {
+    var r = 3 + i;
+    var d = discrepancies[i];
+    sheet.getRange(r, 1).setValue(d.name).setFontWeight(&quot;bold&quot;).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange(r, 2).setFormula(d.status).setHorizontalAlignment(&quot;center&quot;).setFontWeight(&quot;bold&quot;);
+    sheet.getRange(r, 3).setValue(d.signal).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange(r, 4).setValue(d.action).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+    sheet.getRange(r, 5).setValue(d.priority).setHorizontalAlignment(&quot;center&quot;).setFontWeight(&quot;bold&quot;);
+    sheet.setRowHeight(r, 90);
+  }
+
+  // Conditional formatting
+  var statusRange = sheet.getRange(&quot;B3:B10&quot;);
+  var rules = [
+    SpreadsheetApp.newConditionalFormatRule().whenTextContains(&quot;FLAGGED&quot;)
+      .setBackground(COLOURS.badBg).setFontColor(COLOURS.badText).setRanges([statusRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextContains(&quot;Clear&quot;)
+      .setBackground(COLOURS.goodBg).setFontColor(COLOURS.goodText).setRanges([statusRange]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextContains(&quot;No Data&quot;)
+      .setBackground(COLOURS.protectBg).setFontColor(&quot;#888888&quot;).setRanges([statusRange]).build()
+  ];
+  sheet.setConditionalFormatRules(rules);
+
+  var priorityRange = sheet.getRange(&quot;E3:E10&quot;);
+  var pRules = sheet.getConditionalFormatRules();
+  pRules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(&quot;CRITICAL&quot;)
+    .setBackground(COLOURS.badBg).setFontColor(COLOURS.badText).setRanges([priorityRange]).build());
+  pRules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(&quot;HIGH&quot;)
+    .setBackground(COLOURS.watchBg).setFontColor(COLOURS.watchText).setRanges([priorityRange]).build());
+  pRules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(&quot;MEDIUM&quot;)
+    .setBackground(COLOURS.subheaderBg).setFontColor(COLOURS.subheaderText).setRanges([priorityRange]).build());
+  sheet.setConditionalFormatRules(pRules);
+
+  setColWidths(sheet, [220, 120, 300, 340, 90]);
+}
+
+// ─────────────────────────────────────────────
+// TAB: 📈 BENCHMARKS
+// ─────────────────────────────────────────────
+function buildBenchmarks(ss) {
+  var sheet = getOrCreateSheet(ss, &quot;📈 BENCHMARKS&quot;);
+  sheet.setTabColor(COLOURS.tabGrey);
+  sheet.setFrozenRows(1);
+
+  styleHeader(sheet, 1, 1, 6, &quot;📈 BENCHMARKS — Industry Standards by Price Tier&quot;);
+
+  // Column headers
+  var headers = [&quot;Metric&quot;, &quot;Range&quot;, &quot;Midpoint&quot;, &quot;Notes&quot;, &quot;Lookup Key&quot;, &quot;Lookup Value&quot;];
+  styleColumnHeaders(sheet, 2, headers);
+
+  // Hide lookup columns (E and F) — used by FUNNEL FLOW VLOOKUP
+  // Column E = metric_name &amp; tier, Column F = midpoint value
+
+  var tiers = [
+    {
+      name: &quot;MID-TICKET ($1,000 - $5,000)&quot;,
+      key: &quot;mid&quot;,
+      color: COLOURS.subheaderBg,
+      metrics: [
+        [&quot;Ad CTR&quot;,              &quot;1.5-3.0%&quot;,  0.02,   &quot;Click-through rate on ads&quot;],
+        [&quot;Click to LP Rate&quot;,    &quot;80-90%&quot;,    0.85,   &quot;Ad click to landing page load&quot;],
+        [&quot;Opt-in Rate&quot;,         &quot;25-40%&quot;,    0.325,  &quot;Cold traffic opt-in rate&quot;],
+        [&quot;Opt-in to VSL Rate&quot;,  &quot;75-85%&quot;,    0.80,   &quot;Opt-in to VSL page view&quot;],
+        [&quot;VSL Play Rate&quot;,       &quot;60-75%&quot;,    0.675,  &quot;Page view to play&quot;],
+        [&quot;VSL Completion Rate&quot;, &quot;35-50%&quot;,    0.425,  &quot;Play to 100% watched&quot;],
+        [&quot;CTA Click Rate&quot;,      &quot;8-15%&quot;,     0.115,  &quot;Page view to CTA click&quot;],
+        [&quot;Application Rate&quot;,    &quot;10-20%&quot;,    0.15,   &quot;Of completions&quot;],
+        [&quot;Booking Rate&quot;,        &quot;65-80%&quot;,    0.725,  &quot;Application to booking&quot;],
+        [&quot;Show Rate&quot;,           &quot;60-70%&quot;,    0.65,   &quot;Booking to show&quot;],
+        [&quot;Close Rate&quot;,          &quot;15-25%&quot;,    0.20,   &quot;Show to close&quot;],
+        [&quot;Target CPL&quot;,          &quot;15-40&quot;,     27.5,   &quot;Cost per lead&quot;],
+        [&quot;Target ROAS&quot;,         &quot;2.5-4x&quot;,    3.25,   &quot;Revenue / ad spend&quot;]
+      ]
+    },
+    {
+      name: &quot;HIGH-TICKET ($5,000 - $15,000)&quot;,
+      key: &quot;high&quot;,
+      color: &quot;#e8f5e9&quot;,
+      metrics: [
+        [&quot;Ad CTR&quot;,              &quot;1.0-2.5%&quot;,  0.0175, &quot;Click-through rate on ads&quot;],
+        [&quot;Click to LP Rate&quot;,    &quot;80-90%&quot;,    0.85,   &quot;Ad click to landing page load&quot;],
+        [&quot;Opt-in Rate&quot;,         &quot;20-35%&quot;,    0.275,  &quot;Slightly lower, more targeted&quot;],
+        [&quot;Opt-in to VSL Rate&quot;,  &quot;75-85%&quot;,    0.80,   &quot;Opt-in to VSL page view&quot;],
+        [&quot;VSL Play Rate&quot;,       &quot;65-80%&quot;,    0.725,  &quot;Higher intent leads play more&quot;],
+        [&quot;VSL Completion Rate&quot;, &quot;30-45%&quot;,    0.375,  &quot;30-45 min VSL typical&quot;],
+        [&quot;CTA Click Rate&quot;,      &quot;6-12%&quot;,     0.09,   &quot;Page view to CTA click&quot;],
+        [&quot;Application Rate&quot;,    &quot;12-18%&quot;,    0.15,   &quot;Application acts as qualifier&quot;],
+        [&quot;Booking Rate&quot;,        &quot;70-85%&quot;,    0.775,  &quot;High-intent leads book fast&quot;],
+        [&quot;Show Rate&quot;,           &quot;65-75%&quot;,    0.70,   &quot;SMS reminders critical&quot;],
+        [&quot;Close Rate&quot;,          &quot;20-35%&quot;,    0.275,  &quot;Strong closer + pre-call nurture&quot;],
+        [&quot;Target CPL&quot;,          &quot;30-80&quot;,     55,     &quot;Higher CPL acceptable&quot;],
+        [&quot;Target ROAS&quot;,         &quot;3-6x&quot;,      4.5,    &quot;Higher margin allows better ROAS&quot;]
+      ]
+    },
+    {
+      name: &quot;ULTRA HIGH-TICKET ($15,000 - $50,000+)&quot;,
+      key: &quot;ultra_high&quot;,
+      color: &quot;#fce4ec&quot;,
+      metrics: [
+        [&quot;Ad CTR&quot;,              &quot;0.8-2.0%&quot;,  0.014,  &quot;Smaller but targeted audience&quot;],
+        [&quot;Click to LP Rate&quot;,    &quot;80-90%&quot;,    0.85,   &quot;Ad click to landing page load&quot;],
+        [&quot;Opt-in Rate&quot;,         &quot;15-28%&quot;,    0.215,  &quot;Highly targeted audience&quot;],
+        [&quot;Opt-in to VSL Rate&quot;,  &quot;80-90%&quot;,    0.85,   &quot;Serious leads, high intent&quot;],
+        [&quot;VSL Play Rate&quot;,       &quot;70-85%&quot;,    0.775,  &quot;These leads are serious&quot;],
+        [&quot;VSL Completion Rate&quot;, &quot;40-60%&quot;,    0.50,   &quot;Longer VSLs (45-90 min) work here&quot;],
+        [&quot;CTA Click Rate&quot;,      &quot;5-10%&quot;,     0.075,  &quot;Page view to CTA click&quot;],
+        [&quot;Application Rate&quot;,    &quot;8-15%&quot;,     0.115,  &quot;Self-selection filter intentional&quot;],
+        [&quot;Booking Rate&quot;,        &quot;75-90%&quot;,    0.825,  &quot;Setter may precede closer&quot;],
+        [&quot;Show Rate&quot;,           &quot;70-80%&quot;,    0.75,   &quot;Strong confirmation sequence&quot;],
+        [&quot;Close Rate&quot;,          &quot;25-40%&quot;,    0.325,  &quot;2-call close common&quot;],
+        [&quot;Target CPL&quot;,          &quot;60-200&quot;,    130,    &quot;Justified by deal size&quot;],
+        [&quot;Target ROAS&quot;,         &quot;5-10x&quot;,     7.5,    &quot;Larger margins compound faster&quot;]
+      ]
+    }
+  ];
+
+  var currentRow = 3;
+  for (var t = 0; t &lt; tiers.length; t++) {
+    var tier = tiers[t];
+
+    // Tier header
+    sheet.getRange(currentRow, 1, 1, 6).merge()
+      .setValue(tier.name)
+      .setBackground(tier.color)
+      .setFontColor(COLOURS.headerBg)
+      .setFontWeight(&quot;bold&quot;)
+      .setFontSize(12)
+      .setHorizontalAlignment(&quot;center&quot;);
+    sheet.setRowHeight(currentRow, 32);
+    currentRow++;
+
+    for (var m = 0; m &lt; tier.metrics.length; m++) {
+      var metric = tier.metrics[m];
+      sheet.getRange(currentRow, 1).setValue(metric[0]);
+      sheet.getRange(currentRow, 2).setValue(metric[1]).setHorizontalAlignment(&quot;center&quot;).setFontWeight(&quot;bold&quot;);
+      sheet.getRange(currentRow, 3).setValue(metric[2]).setNumberFormat(&quot;0.0%&quot;).setHorizontalAlignment(&quot;center&quot;);
+      sheet.getRange(currentRow, 4).setValue(metric[3]).setFontColor(&quot;#555555&quot;);
+
+      // Lookup key: metric_name + tier_key (for VLOOKUP from FUNNEL FLOW)
+      sheet.getRange(currentRow, 5).setValue(metric[0] + tier.key);
+      sheet.getRange(currentRow, 6).setValue(metric[2]).setNumberFormat(&quot;0.000&quot;);
+
+      sheet.getRange(currentRow, 1, 1, 6).setBackground(COLOURS.protectBg);
+      currentRow++;
+    }
+    currentRow++; // spacer row
+  }
+
+  // CPL and ROAS rows need different formatting (not percentage)
+  // Go back and fix format for CPL and ROAS rows
+  for (var fixRow = 3; fixRow &lt;= currentRow; fixRow++) {
+    var cellVal = sheet.getRange(fixRow, 1).getValue();
+    if (cellVal === &quot;Target CPL&quot;) {
+      sheet.getRange(fixRow, 3).setNumberFormat(&quot;#,##0.00&quot;);
+      sheet.getRange(fixRow, 6).setNumberFormat(&quot;#,##0.00&quot;);
+    }
+    if (cellVal === &quot;Target ROAS&quot;) {
+      sheet.getRange(fixRow, 3).setNumberFormat(&quot;0.0x&quot;);
+      sheet.getRange(fixRow, 6).setNumberFormat(&quot;0.0&quot;);
+    }
+  }
+
+  // Protect this sheet
+  var protection = sheet.protect().setDescription(&quot;Benchmark reference - do not edit&quot;);
+  protection.setWarningOnly(true);
+
+  // Hide lookup columns
+  sheet.hideColumns(5, 2);
+
+  setColWidths(sheet, [220, 120, 100, 260, 200, 100]);
+}
+
+// ─────────────────────────────────────────────
+// WEBHOOK ENDPOINT (doPost)
+// ─────────────────────────────────────────────
+// Basic webhook endpoint for receiving manual events
+// For production use, deploy the Vercel API instead
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(&quot;👤 LEAD JOURNEYS&quot;);
+    if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: &quot;LEAD JOURNEYS tab not found&quot;}));
+
+    var row = [
+      data.timestamp || new Date().toISOString(),
+      data.email || &quot;&quot;,
+      data.event_type || &quot;&quot;,
+      data.event_source || &quot;gas_webhook&quot;,
+      data.first_name || &quot;&quot;,
+      data.last_name || &quot;&quot;,
+      data.phone || &quot;&quot;,
+      data.utm_source || &quot;&quot;,
+      data.utm_medium || &quot;&quot;,
+      data.utm_campaign || &quot;&quot;,
+      data.utm_content || &quot;&quot;,
+      data.utm_term || &quot;&quot;,
+      data.page_url || &quot;&quot;,
+      data.fbclid || &quot;&quot;,
+      data.gclid || &quot;&quot;,
+      data.video_milestone || &quot;&quot;,
+      data.deal_value || &quot;&quot;,
+      data.ad_campaign || &quot;&quot;,
+      data.ad_set || &quot;&quot;,
+      data.ad_creative || &quot;&quot;,
+      data.metadata ? JSON.stringify(data.metadata) : &quot;&quot;,
+      data.event_id || &quot;gas_&quot; + new Date().getTime(),
+      (data.timestamp || new Date().toISOString()).split(&quot;T&quot;)[0]
+    ];
+
+    sheet.appendRow(row);
+    return ContentService.createTextOutput(JSON.stringify({status: &quot;ok&quot;, event_type: data.event_type}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({error: err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+</code></pre>
+<script>
+// Add line wrapping
+const code = document.querySelector("code");
+const lines = code.textContent.split("
+");
+code.innerHTML = lines.map(line => {
+  let h = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // Basic syntax highlighting
+  h = h.replace(/(\/\/.*$)/gm, "<span class="comment"></span>");
+  h = h.replace(/(\/\*[\s\S]*?\*\/)/g, "<span class="comment"></span>");
+  h = h.replace(/(var|function|if|else|for|return|new|this|typeof|true|false|null|try|catch|throw)/g, "<span class="keyword"></span>");
+  h = h.replace(/("[^"]*"|'[^']*')/g, "<span class="string"></span>");
+  h = h.replace(/(\d+\.?\d*)/g, "<span class="number"></span>");
+  return "<span class="line">" + h + "</span>";
+}).join("");
+</script>
+</body>
+</html>

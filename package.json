@@ -1,0 +1,16 @@
+{
+  "name": "vsl-dashboard-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VSL funnel tracker: Google Sheet, Vercel API, dashboard and page tracking snippet",
+  "license": "MIT",
+  "engines": { "node": ">=20.x" },
+  "scripts": {
+    "dev": "node scripts/dev-server.js",
+    "build": "node scripts/check.js",
+    "start": "node scripts/dev-server.js"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  }
+}

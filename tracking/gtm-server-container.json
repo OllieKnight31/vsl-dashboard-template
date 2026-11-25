@@ -1,0 +1,90 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2026-03-11",
+  "description": "VSL Funnel Tracker — Server-Side GTM Container for Meta CAPI Bridge. Deploy to stape.io, Google Cloud Run, or App Engine.",
+  "notes": [
+    "This server container receives events from the web container's GA4 tag",
+    "and forwards them to Meta's Conversions API for server-side tracking.",
+    "",
+    "SETUP:",
+    "1. Create a Server container in GTM (tagmanager.google.com)",
+    "2. Deploy to stape.io ($10-30/mo) or Google Cloud Run (~$5-15/mo)",
+    "3. Import this JSON into the server container",
+    "4. Update the Meta CAPI Access Token variable",
+    "5. Update the Pixel ID variable",
+    "6. Map your custom domain (e.g. gtm.yourdomain.com)",
+    "",
+    "The server container does 3 things:",
+    "1. Receives GA4 events from the web container",
+    "2. Forwards them to Meta CAPI with hashed user data",
+    "3. Uses the same event_id for deduplication with browser pixel"
+  ],
+  "containerVersion": {
+    "client": [
+      {
+        "name": "GA4 Client",
+        "type": "gaaw_client",
+        "notes": "Receives measurement protocol hits from GA4 web tag"
+      }
+    ],
+    "tag": [
+      {
+        "name": "Meta CAPI - Lead Event",
+        "type": "cvt_meta_capi",
+        "notes": "Install the 'Facebook Conversions API Tag' template from GTM Community Gallery. Configure: Pixel ID, Access Token, event_name=Lead, event_id from GA4 event parameter, user_data (hashed email, phone, ip, user_agent).",
+        "configuration": {
+          "pixel_id": "{{CAPI - Pixel ID}}",
+          "access_token": "{{CAPI - Access Token}}",
+          "event_name": "Lead",
+          "event_id_source": "event_parameter",
+          "event_id_parameter": "eventId",
+          "user_data": {
+            "em": "{{Event Data - email}}",
+            "client_ip_address": "{{Client IP}}",
+            "client_user_agent": "{{Client User Agent}}"
+          },
+          "action_source": "website"
+        }
+      },
+      {
+        "name": "Meta CAPI - Schedule Event",
+        "type": "cvt_meta_capi",
+        "configuration": {
+          "pixel_id": "{{CAPI - Pixel ID}}",
+          "access_token": "{{CAPI - Access Token}}",
+          "event_name": "Schedule",
+          "event_id_source": "event_parameter",
+          "event_id_parameter": "eventId",
+          "action_source": "website"
+        }
+      },
+      {
+        "name": "Meta CAPI - Custom Video Events",
+        "type": "cvt_meta_capi",
+        "notes": "Forwards VideoStart, Video25/50/75Percent, VideoComplete to CAPI",
+        "configuration": {
+          "pixel_id": "{{CAPI - Pixel ID}}",
+          "access_token": "{{CAPI - Access Token}}",
+          "event_name": "{{Event Name}}",
+          "event_id_source": "event_parameter",
+          "event_id_parameter": "eventId",
+          "action_source": "website"
+        }
+      }
+    ],
+    "variable": [
+      {
+        "name": "CAPI - Pixel ID",
+        "type": "c",
+        "value": "YOUR_PIXEL_ID_HERE",
+        "notes": "Replace with your Meta Pixel ID"
+      },
+      {
+        "name": "CAPI - Access Token",
+        "type": "c",
+        "value": "YOUR_SYSTEM_USER_ACCESS_TOKEN",
+        "notes": "Generate in Meta Business Settings > System Users > Generate Token with ads_management permission"
+      }
+    ]
+  }
+}

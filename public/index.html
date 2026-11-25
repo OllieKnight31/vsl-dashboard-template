@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSL Funnel Tracker</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #e4e4e7; line-height: 1.5; }
+
+  .nav { background: #0c0c0e; padding: 10px 24px; display: flex; align-items: center; gap: 8px; overflow-x: auto; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #1c1c22; }
+  .nav-title { color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; margin-right: 12px; letter-spacing: -0.3px; }
+  .tab-btn { background: transparent; color: #71717a; border: none; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; transition: all 0.15s; font-weight: 500; }
+  .tab-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+  .tab-btn.active { background: #18181b; color: #fff; font-weight: 600; }
+
+  .tab-content { display: none; padding: 20px 24px; max-width: 1440px; margin: 0 auto; }
+  .tab-content.active { display: block; }
+
+  /* ── Cards & Sections ── */
+  .card { background: #111113; border-radius: 12px; border: 1px solid #1c1c22; overflow: hidden; margin-bottom: 16px; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid #1c1c22; display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: -0.2px; text-transform: uppercase; }
+  .card-header .badge { font-size: 9px; font-weight: 600; padding: 3px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-green { background: rgba(52,211,153,0.15); color: #34d399; }
+  .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .badge-blue { background: rgba(96,165,250,0.15); color: #60a5fa; }
+  .card-body { padding: 20px; }
+
+  /* ── Section Label ── */
+  .section-label { font-size: 10px; font-weight: 700; color: #52525b; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; padding-left: 2px; }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: #52525b; padding: 8px 12px; text-align: center; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #1c1c22; }
+  td { padding: 8px 12px; border-bottom: 1px solid #18181b; color: #a1a1aa; }
+  tr:hover { background: rgba(255,255,255,0.015); }
+  .total-row td { background: #18181b; font-weight: 700; color: #fff; border-top: 1px solid #27272a; }
+
+  .tag-green { background: rgba(52,211,153,0.12); color: #34d399; font-weight: 600; padding: 3px 10px; border-radius: 20px; font-size: 10px; display: inline-block; }
+  .tag-orange { background: rgba(251,191,36,0.12); color: #fbbf24; font-weight: 600; padding: 3px 10px; border-radius: 20px; font-size: 10px; display: inline-block; }
+  .tag-red { background: rgba(239,68,68,0.12); color: #ef4444; font-weight: 600; padding: 3px 10px; border-radius: 20px; font-size: 10px; display: inline-block; }
+
+  /* ── Pipeline ── */
+  .pipeline { display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding: 8px 0; justify-content: center; }
+  .pipe-card { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 14px 16px; text-align: center; min-width: 110px; transition: border-color 0.2s; }
+  .pipe-card:hover { border-color: #3f3f46; }
+  .pipe-card .pc-label { font-size: 9px; color: #52525b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+  .pipe-card .pc-value { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+  .pipe-card.alert { border-color: #ef4444; background: rgba(239,68,68,0.04); }
+  .pipe-card.alert .pc-value { color: #ef4444; }
+  .pipe-card.success { border-color: #34d399; }
+  .pipe-card.success .pc-value { color: #34d399; }
+
+  .pipe-drop { display: flex; flex-direction: column; align-items: center; padding: 0 4px; min-width: 50px; }
+  .pipe-drop .pd-arrow { color: #27272a; font-size: 14px; }
+  .pipe-drop .pd-pct { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+  .pct-green { background: rgba(52,211,153,0.1); color: #34d399; }
+  .pct-yellow { background: rgba(251,191,36,0.1); color: #fbbf24; }
+  .pct-red { background: rgba(239,68,68,0.12); color: #ef4444; }
+
+  /* ── Stat Grid ── */
+  .stat-grid { display: grid; gap: 12px; }
+  .stat-grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .stat-grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .stat-box { background: #18181b; border: 1px solid #27272a; border-radius: 10px; padding: 16px; }
+  .stat-box .sb-label { font-size: 10px; color: #52525b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+  .stat-box .sb-value { font-size: 24px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+  .stat-box .sb-sub { font-size: 11px; color: #52525b; margin-top: 4px; }
+  .stat-box.accent { border-color: #34d399; }
+  .stat-box.accent .sb-value { color: #34d399; }
+
+  /* ── Week Comparison ── */
+  .week-row { display: grid; grid-template-columns: 1fr 80px 80px 80px; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid #18181b; }
+  .week-row:last-child { border-bottom: none; }
+  .week-row:hover { background: rgba(255,255,255,0.015); }
+  .week-row .wr-label { font-size: 12px; color: #a1a1aa; font-weight: 500; }
+  .week-row .wr-this { font-size: 14px; font-weight: 700; color: #fff; text-align: right; }
+  .week-row .wr-last { font-size: 12px; color: #52525b; text-align: right; }
+  .week-row .wr-change { text-align: right; font-size: 11px; font-weight: 600; }
+  .week-header { display: grid; grid-template-columns: 1fr 80px 80px 80px; padding: 8px 16px; border-bottom: 1px solid #1c1c22; }
+  .week-header span { font-size: 9px; font-weight: 700; color: #3f3f46; text-transform: uppercase; letter-spacing: 0.8px; }
+  .week-header span:not(:first-child) { text-align: right; }
+
+  /* ── Donut Charts (CSS) ── */
+  .donut-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .donut-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .donut { width: 80px; height: 80px; border-radius: 50%; position: relative; display: flex; align-items: center; justify-content: center; }
+  .donut::after { content: ''; position: absolute; width: 52px; height: 52px; background: #111113; border-radius: 50%; }
+  .donut .donut-val { position: relative; z-index: 1; font-size: 14px; font-weight: 800; color: #fff; }
+  .donut-label { font-size: 10px; color: #71717a; text-align: center; }
+
+  /* ── Bar Chart (CSS) ── */
+  .bar-chart { display: flex; flex-direction: column; gap: 10px; }
+  .bar-row { display: flex; align-items: center; gap: 10px; }
+  .bar-row .br-label { font-size: 11px; color: #71717a; width: 80px; text-align: right; flex-shrink: 0; }
+  .bar-row .br-track { flex: 1; height: 24px; background: #18181b; border-radius: 6px; overflow: hidden; position: relative; }
+  .bar-row .br-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: 10px; font-weight: 700; color: #fff; transition: width 0.5s; }
+  .bar-row .br-value { font-size: 11px; color: #52525b; width: 50px; text-align: right; flex-shrink: 0; }
+
+  /* ── Top Creatives ── */
+  .creative-row { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid #18181b; gap: 12px; }
+  .creative-row:last-child { border: none; }
+  .creative-rank { width: 24px; height: 24px; border-radius: 6px; background: #27272a; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #71717a; flex-shrink: 0; }
+  .creative-info { flex: 1; }
+  .creative-info .ci-name { font-size: 12px; font-weight: 600; color: #e4e4e7; }
+  .creative-info .ci-meta { font-size: 10px; color: #52525b; }
+  .creative-stat { text-align: right; }
+  .creative-stat .cs-value { font-size: 13px; font-weight: 700; color: #fff; }
+  .creative-stat .cs-label { font-size: 9px; color: #52525b; text-transform: uppercase; }
+
+  .hidden-badge { background: #27272a; color: #71717a; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-left: 6px; }
+  .auto-badge { background: rgba(52,211,153,0.15); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600; margin-left: 6px; }
+
+  /* ── Auth Gate ── */
+  #auth-gate { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #09090b; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #auth-gate .gate-card { background: #111113; border: 1px solid #1c1c22; border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; text-align: center; }
+  #auth-gate h1 { font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -0.5px; margin-bottom: 4px; }
+  #auth-gate .gate-sub { font-size: 13px; color: #52525b; margin-bottom: 24px; }
+  #auth-gate input { width: 100%; padding: 12px 16px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; color: #fff; font-size: 14px; outline: none; margin-bottom: 12px; }
+  #auth-gate input:focus { border-color: #3f3f46; }
+  #auth-gate button { width: 100%; padding: 12px; background: #fff; color: #000; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+  #auth-gate button:hover { opacity: 0.9; }
+  #auth-gate .gate-error { color: #ef4444; font-size: 12px; margin-top: 8px; display: none; }
+  #auth-gate .gate-footer { margin-top: 32px; }
+  #auth-gate .gate-footer a { color: #52525b; font-size: 13px; text-decoration: none; }
+  #auth-gate .gate-footer a:hover { color: #71717a; }
+  body.locked .nav, body.locked .tab-content, body.locked > footer, body.locked .status-bar { display: none !important; }
+
+  /* ── Status Bar ── */
+  .status-bar { background: #0c0c0e; border-bottom: 1px solid #1c1c22; padding: 8px 24px; display: flex; align-items: center; gap: 24px; font-size: 11px; overflow-x: auto; }
+  .status-bar .sb-label { color: #52525b; font-weight: 600; white-space: nowrap; }
+  .status-bar .sb-item { display: flex; align-items: center; gap: 6px; white-space: nowrap; color: #71717a; }
+  .status-bar .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot-green { background: #34d399; box-shadow: 0 0 4px rgba(52,211,153,0.5); }
+  .dot-amber { background: #fbbf24; box-shadow: 0 0 4px rgba(251,191,36,0.5); }
+  .dot-red { background: #ef4444; box-shadow: 0 0 4px rgba(239,68,68,0.5); }
+  .status-bar .sb-item { cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background 0.15s; }
+  .status-bar .sb-item:hover { background: rgba(255,255,255,0.05); }
+
+  /* ── Connection Modal ── */
+  #conn-modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9998; }
+  #conn-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #111113; border: 1px solid #1c1c22; border-radius: 16px; padding: 32px; width: 100%; max-width: 480px; z-index: 9999; }
+  #conn-modal h3 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  #conn-modal .cm-status { font-size: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+  #conn-modal .cm-instructions { font-size: 13px; color: #a1a1aa; line-height: 1.6; margin-bottom: 20px; padding: 12px 16px; background: #18181b; border-radius: 8px; border: 1px solid #27272a; }
+  #conn-modal .cm-instructions ol { padding-left: 18px; margin: 8px 0 0; }
+  #conn-modal .cm-instructions li { margin-bottom: 6px; }
+  #conn-modal label { font-size: 11px; font-weight: 600; color: #52525b; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+  #conn-modal input[type="text"] { width: 100%; padding: 10px 14px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; color: #fff; font-size: 13px; outline: none; margin-bottom: 16px; font-family: monospace; }
+  #conn-modal input[type="text"]:focus { border-color: #3f3f46; }
+  #conn-modal .cm-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  #conn-modal .cm-btn { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s; }
+  #conn-modal .cm-btn-primary { background: #34d399; color: #000; }
+  #conn-modal .cm-btn-primary:hover { opacity: 0.9; }
+  #conn-modal .cm-btn-cancel { background: #27272a; color: #a1a1aa; }
+  #conn-modal .cm-btn-cancel:hover { background: #3f3f46; }
+  #conn-modal .cm-success { display: none; text-align: center; padding: 20px 0; }
+  #conn-modal .cm-success .check { font-size: 40px; margin-bottom: 8px; }
+  #conn-modal .cm-success p { color: #34d399; font-weight: 600; font-size: 14px; }
+
+  @media (max-width: 900px) {
+    .pipeline { flex-direction: column; }
+    .stat-grid-4, .stat-grid-3 { grid-template-columns: repeat(2, 1fr); }
+    .donut-row { grid-template-columns: repeat(2, 1fr); }
+    .week-row, .week-header { grid-template-columns: 1fr 60px 60px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="auth-gate" style="display:none;">
+  <div class="gate-card">
+    <h1 class="brand-name">Your Brand</h1>
+    <div class="gate-sub brand-tagline">VSL Funnel Tracker</div>
+    <input type="password" id="gate-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkGate()">
+    <button onclick="checkGate()">View Dashboard</button>
+    <div class="gate-error" id="gate-err">Incorrect password</div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span class="sb-label">Connections</span>
+  <span class="sb-item" onclick="openConn('gsheets')" id="conn-gsheets"><span class="dot dot-green"></span> Google Sheets</span>
+  <span class="sb-item" onclick="openConn('meta')" id="conn-meta"><span class="dot dot-green"></span> Meta Ads API</span>
+  <span class="sb-item" onclick="openConn('crm')" id="conn-crm"><span class="dot dot-green"></span> CRM Webhooks</span>
+  <span class="sb-item" onclick="openConn('tracking')" id="conn-tracking"><span class="dot dot-green"></span> Video Tracking</span>
+  <span class="sb-item" onclick="openConn('tiktok')" id="conn-tiktok"><span class="dot dot-amber"></span> TikTok Ads</span>
+</div>
+
+<div id="conn-modal-overlay" onclick="closeConn()"></div>
+<div id="conn-modal">
+  <h3 id="cm-title"></h3>
+  <div class="cm-status" id="cm-status"></div>
+  <div id="cm-form">
+    <div class="cm-instructions" id="cm-instructions"></div>
+    <label id="cm-input-label">API KEY</label>
+    <input type="text" id="cm-input" placeholder="Paste your API key here...">
+    <div class="cm-actions">
+      <button class="cm-btn cm-btn-cancel" onclick="closeConn()">Cancel</button>
+      <button class="cm-btn cm-btn-primary" onclick="connectAPI()">Connect</button>
+    </div>
+  </div>
+  <div class="cm-success" id="cm-success">
+    <div class="check">&#10003;</div>
+    <p id="cm-success-text">Connected successfully</p>
+  </div>
+</div>
+
+<nav class="nav">
+  <span class="nav-title brand-name">Your Brand</span>
+  <span class="brand-tagline" style="font-size:11px;color:#52525b;margin-right:12px;">VSL Funnel Tracker</span>
+  <select id="currency-select" onchange="switchCurrency(this.value)" style="background:#18181b;border:1px solid #27272a;color:#e4e4e7;padding:5px 8px;border-radius:6px;font-size:11px;cursor:pointer;outline:none;margin-right:4px;">
+    <option value="GBP">£ GBP</option>
+    <option value="USD">$ USD</option>
+    <option value="EUR">€ EUR</option>
+  </select>
+  <button class="tab-btn active" onclick="showTab('dashboard')">Dashboard</button>
+  <button class="tab-btn" onclick="showTab('admetrics')">Ad Metrics</button>
+  <button class="tab-btn" onclick="showTab('dailylog')">Daily Log</button>
+  <button class="tab-btn" onclick="showTab('vslanalytics')">VSL Analytics</button>
+  <button class="tab-btn" onclick="showTab('revenue')">Revenue</button>
+  <button class="tab-btn" onclick="showTab('leadjourneys')">Lead Journeys</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- DASHBOARD -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="dashboard" class="tab-content active">
+
+  <!-- FUNNEL PIPELINE -->
+  <div class="card">
+    <div class="card-header">
+      <h2>Funnel Pipeline</h2>
+      <span class="badge badge-red">1 Bottleneck</span>
+    </div>
+    <div class="card-body">
+      <div class="pipeline">
+        <div class="pipe-card">
+          <div class="pc-label">Impressions</div>
+          <div class="pc-value">125K</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-green">2.4%</span></div>
+        <div class="pipe-card">
+          <div class="pc-label">Clicks</div>
+          <div class="pc-value">3,000</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-green">89.3%</span></div>
+        <div class="pipe-card">
+          <div class="pc-label">LP Views</div>
+          <div class="pc-value">2,680</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-green">88.9%</span></div>
+        <div class="pipe-card">
+          <div class="pc-label">VSL Plays</div>
+          <div class="pc-value">612</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-yellow">38.1%</span></div>
+        <div class="pipe-card">
+          <div class="pc-label">Completions</div>
+          <div class="pc-value">233</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-red">11.1%</span></div>
+        <div class="pipe-card alert">
+          <div class="pc-label">Applied & Booked</div>
+          <div class="pc-value">94</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-green">52.1%</span></div>
+        <div class="pipe-card">
+          <div class="pc-label">Shows</div>
+          <div class="pc-value">49</div>
+        </div>
+        <div class="pipe-drop"><span class="pd-arrow">→</span><span class="pd-pct pct-yellow">24.5%</span></div>
+        <div class="pipe-card success">
+          <div class="pc-label">Closed</div>
+          <div class="pc-value">12</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP-LEVEL STATS -->
+  <div class="stat-grid stat-grid-4" style="margin-bottom:16px;">
+    <div class="stat-box accent">
+      <div class="sb-label">Revenue</div>
+      <div class="sb-value">£96,000</div>
+      <div class="sb-sub">12 deals closed</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">ROAS</div>
+      <div class="sb-value" style="color:#34d399;">4.8x</div>
+      <div class="sb-sub">Target: 3-6x</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Cost Per Lead</div>
+      <div class="sb-value">£23.60</div>
+      <div class="sb-sub">£20K total spend</div>
+    </div>
+    <div class="stat-box">
+      <div class="sb-label">Cost Per Acquisition</div>
+      <div class="sb-value">£1,667</div>
+      <div class="sb-sub">Revenue per lead: £113</div>
+    </div>
+  </div>
+
+  <!-- TWO COLUMN: Conversion Rates + Video Drop-off -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- Conversion Rate Donuts -->
+    <div class="card">
+      <div class="card-header"><h2>Conversion Rates</h2></div>
+      <div class="card-body">
+        <div class="donut-row">
+          <div class="donut-item">
+            <div class="donut" style="background:conic-gradient(#3b82f6 0% 22.8%, #27272a 22.8% 100%);">
+              <span class="donut-val">22.8%</span>
+            </div>
+            <div class="donut-label">LP → Play</div>
+          </div>
+          <div class="donut-item">
+            <div class="donut" style="background:conic-gradient(#a855f7 0% 38.1%, #27272a 38.1% 100%);">
+              <span class="donut-val">38.1%</span>
+            </div>
+            <div class="donut-label">Play → Complete</div>
+          </div>
+          <div class="donut-item">
+            <div class="donut" style="background:conic-gradient(#ef4444 0% 11.1%, #27272a 11.1% 100%);">
+              <span class="donut-val" style="color:#ef4444;">11.1%</span>
+            </div>
+            <div class="donut-label">Complete → Apply</div>
+          </div>
+          <div class="donut-item">
+            <div class="donut" style="background:conic-gradient(#34d399 0% 24.5%, #27272a 24.5% 100%);">
+              <span class="donut-val">24.5%</span>
+            </div>
+            <div class="donut-label">Show → Close</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Video Drop-off -->
+    <div class="card">
+      <div class="card-header"><h2>VSL Watch Drop-off</h2></div>
+      <div class="card-body">
+        <div class="bar-chart">
+          <div class="bar-row">
+            <span class="br-label">Play</span>
+            <div class="br-track"><div class="br-fill" style="width:100%;background:#3b82f6;">612</div></div>
+            <span class="br-value">100%</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">25%</span>
+            <div class="br-track"><div class="br-fill" style="width:79.9%;background:#6366f1;">489</div></div>
+            <span class="br-value">79.9%</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">50%</span>
+            <div class="br-track"><div class="br-fill" style="width:59.9%;background:#8b5cf6;">367</div></div>
+            <span class="br-value">59.9%</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">75%</span>
+            <div class="br-track"><div class="br-fill" style="width:48.7%;background:#a855f7;">298</div></div>
+            <span class="br-value">48.7%</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">100%</span>
+            <div class="br-track"><div class="br-fill" style="width:38.1%;background:#c084fc;">233</div></div>
+            <span class="br-value">38.1%</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">CTA Click</span>
+            <div class="br-track"><div class="br-fill" style="width:23.2%;background:#34d399;">142</div></div>
+            <span class="br-value">23.2%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TWO COLUMN: This Week vs Last Week + KPIs -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- This Week vs Last Week -->
+    <div class="card">
+      <div class="card-header"><h2>This Week vs Last Week</h2></div>
+      <div class="week-header">
+        <span>Metric</span><span>This Week</span><span>Last Week</span><span>Change</span>
+      </div>
+      <div class="week-row"><span class="wr-label">New Leads</span><span class="wr-this">218</span><span class="wr-last">194</span><span class="wr-change" style="color:#34d399;">+12.4%</span></div>
+      <div class="week-row"><span class="wr-label">VSL Plays</span><span class="wr-this">158</span><span class="wr-last">142</span><span class="wr-change" style="color:#34d399;">+11.3%</span></div>
+      <div class="week-row"><span class="wr-label">Applications</span><span class="wr-this">22</span><span class="wr-last">26</span><span class="wr-change" style="color:#ef4444;">-15.4%</span></div>
+      <div class="week-row"><span class="wr-label">Shows</span><span class="wr-this">8</span><span class="wr-last">9</span><span class="wr-change" style="color:#fbbf24;">-11.1%</span></div>
+      <div class="week-row"><span class="wr-label">Sales</span><span class="wr-this">3</span><span class="wr-last">3</span><span class="wr-change" style="color:#52525b;">--</span></div>
+      <div class="week-row"><span class="wr-label">Revenue</span><span class="wr-this">£24K</span><span class="wr-last">£24K</span><span class="wr-change" style="color:#52525b;">--</span></div>
+      <div class="week-row"><span class="wr-label">Ad Spend</span><span class="wr-this">£4.2K</span><span class="wr-last">£3.9K</span><span class="wr-change" style="color:#fbbf24;">+7.7%</span></div>
+      <div class="week-row"><span class="wr-label">ROAS</span><span class="wr-this">5.7x</span><span class="wr-last">6.2x</span><span class="wr-change" style="color:#fbbf24;">-8.1%</span></div>
+    </div>
+
+    <!-- KPIs vs Benchmarks -->
+    <div class="card">
+      <div class="card-header"><h2>KPIs vs Benchmarks</h2><span class="badge badge-blue">High-Ticket</span></div>
+      <table>
+        <tr><th style="text-align:left;">Metric</th><th>Actual</th><th>Bench</th><th>Status</th></tr>
+        <tr><td>LP → VSL Play Rate</td><td style="text-align:center;">22.8%</td><td style="text-align:center;color:#3f3f46;">20.0%</td><td style="text-align:center;"><span class="tag-green">On Track</span></td></tr>
+        <tr><td>VSL Completion</td><td style="text-align:center;">38.1%</td><td style="text-align:center;color:#3f3f46;">37.5%</td><td style="text-align:center;"><span class="tag-green">On Track</span></td></tr>
+        <tr><td style="color:#ef4444;">Application Rate</td><td style="text-align:center;color:#ef4444;">11.1%</td><td style="text-align:center;color:#3f3f46;">15.0%</td><td style="text-align:center;"><span class="tag-red">Below</span></td></tr>
+        <tr><td>Show Rate</td><td style="text-align:center;">52.1%</td><td style="text-align:center;color:#3f3f46;">70.0%</td><td style="text-align:center;"><span class="tag-orange">Watch</span></td></tr>
+        <tr><td>Close Rate</td><td style="text-align:center;">24.5%</td><td style="text-align:center;color:#3f3f46;">27.5%</td><td style="text-align:center;"><span class="tag-orange">Watch</span></td></tr>
+        <tr><td>ROAS</td><td style="text-align:center;">4.8x</td><td style="text-align:center;color:#3f3f46;">4.5x</td><td style="text-align:center;"><span class="tag-green">On Track</span></td></tr>
+        <tr><td>CPL</td><td style="text-align:center;">£23.60</td><td style="text-align:center;color:#3f3f46;">£25.00</td><td style="text-align:center;"><span class="tag-green">On Track</span></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- TWO COLUMN: Top Creatives + Platform Split -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+
+    <!-- Top Performing Creatives -->
+    <div class="card">
+      <div class="card-header"><h2>Top Creatives by CPL</h2></div>
+      <div class="card-body" style="padding:12px 20px;">
+        <div class="creative-row">
+          <div class="creative-rank" style="background:#34d399;color:#000;">1</div>
+          <div class="creative-info"><div class="ci-name">Hook Pain v1</div><div class="ci-meta">VSL Cold - Coaches &bull; LAL 1%</div></div>
+          <div class="creative-stat"><div class="cs-value" style="color:#34d399;">£5.83</div><div class="cs-label">CPL</div></div>
+        </div>
+        <div class="creative-row">
+          <div class="creative-rank">2</div>
+          <div class="creative-info"><div class="ci-name">Testimonial v2</div><div class="ci-meta">VSL Cold - Coaches &bull; Interest</div></div>
+          <div class="creative-stat"><div class="cs-value">£6.43</div><div class="cs-label">CPL</div></div>
+        </div>
+        <div class="creative-row">
+          <div class="creative-rank">3</div>
+          <div class="creative-info"><div class="ci-name">UGC Hook v1</div><div class="ci-meta">VSL TikTok Cold &bull; Entrepreneurs</div></div>
+          <div class="creative-stat"><div class="cs-value">£11.71</div><div class="cs-label">CPL</div></div>
+        </div>
+        <div class="creative-row">
+          <div class="creative-rank">4</div>
+          <div class="creative-info"><div class="ci-name">Free Training</div><div class="ci-meta">VSL Search Brand &bull; Keywords</div></div>
+          <div class="creative-stat"><div class="cs-value">£13.18</div><div class="cs-label">CPL</div></div>
+        </div>
+        <div class="creative-row">
+          <div class="creative-rank">5</div>
+          <div class="creative-info"><div class="ci-name">15s Hook Results</div><div class="ci-meta">VSL Pre-Roll &bull; Affinity</div></div>
+          <div class="creative-stat"><div class="cs-value" style="color:#ef4444;">£21.33</div><div class="cs-label">CPL</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Platform Split -->
+    <div class="card">
+      <div class="card-header"><h2>Ad Spend by Platform</h2></div>
+      <div class="card-body">
+        <div class="bar-chart">
+          <div class="bar-row">
+            <span class="br-label">Meta</span>
+            <div class="br-track"><div class="br-fill" style="width:58%;background:#3b82f6;">£425 &bull; 70 leads</div></div>
+            <span class="br-value">£6.07</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">TikTok</span>
+            <div class="br-track"><div class="br-fill" style="width:28%;background:#f472b6;">£410 &bull; 35 leads</div></div>
+            <span class="br-value">£11.71</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">YouTube</span>
+            <div class="br-track"><div class="br-fill" style="width:22%;background:#ef4444;">£320 &bull; 15 leads</div></div>
+            <span class="br-value">£21.33</span>
+          </div>
+          <div class="bar-row">
+            <span class="br-label">Google</span>
+            <div class="br-track"><div class="br-fill" style="width:20%;background:#fbbf24;">£290 &bull; 22 leads</div></div>
+            <span class="br-value">£13.18</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:space-between;font-size:11px;color:#52525b;">
+          <span>Total: £1,445 across 4 platforms</span>
+          <span>142 leads &bull; Blended CPL: £10.18</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Revenue Attribution -->
+  <div class="card">
+    <div class="card-header"><h2>Recent Closes — Revenue Attribution</h2></div>
+    <table>
+      <tr><th>Date</th><th>Client</th><th style="color:#34d399;">Source</th><th style="color:#34d399;">Campaign</th><th style="color:#34d399;">Creative</th><th>Value</th><th>CPA</th></tr>
+      <tr><td>2026-03-04</td><td>John Smith</td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td style="color:#34d399;">hook_pain_v1</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£580</td></tr>
+      <tr><td>2026-03-07</td><td>Sarah Jones</td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td style="color:#34d399;">testimonial_v2</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£420</td></tr>
+      <tr><td>2026-03-09</td><td>Mark Williams</td><td style="color:#34d399;">google</td><td style="color:#34d399;">vsl_search_brand</td><td style="color:#34d399;">free_training</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£650</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- AD METRICS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="admetrics" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h2>Ad Metrics</h2></div>
+    <div style="overflow-x:auto;">
+    <table>
+      <tr><th>Date</th><th>Platform</th><th>Campaign</th><th>Ad Set</th><th>Ad Name</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>Spend</th><th>Leads</th><th>CPL</th></tr>
+      <tr><td>2026-03-10</td><td>meta</td><td>VSL Cold - Coaches</td><td>LAL Customers 1%</td><td>Hook Pain v1</td><td style="text-align:center;">12,500</td><td style="text-align:center;">310</td><td style="text-align:center;color:#60a5fa;">2.48%</td><td style="text-align:center;">£245</td><td style="text-align:center;">42</td><td style="text-align:center;color:#60a5fa;">£5.83</td></tr>
+      <tr><td>2026-03-10</td><td>meta</td><td>VSL Cold - Coaches</td><td>Interest Biz Coaches</td><td>Testimonial v2</td><td style="text-align:center;">8,200</td><td style="text-align:center;">195</td><td style="text-align:center;color:#60a5fa;">2.38%</td><td style="text-align:center;">£180</td><td style="text-align:center;">28</td><td style="text-align:center;color:#60a5fa;">£6.43</td></tr>
+      <tr><td>2026-03-10</td><td>youtube</td><td>VSL Pre-Roll</td><td>Affinity Entrepreneurs</td><td>15s Hook Results</td><td style="text-align:center;">45,000</td><td style="text-align:center;">890</td><td style="text-align:center;color:#60a5fa;">1.98%</td><td style="text-align:center;">£320</td><td style="text-align:center;">15</td><td style="text-align:center;color:#60a5fa;">£21.33</td></tr>
+      <tr><td>2026-03-10</td><td>google</td><td>VSL Search Brand</td><td>Coaching Keywords</td><td>Free Training</td><td style="text-align:center;">3,200</td><td style="text-align:center;">180</td><td style="text-align:center;color:#60a5fa;">5.63%</td><td style="text-align:center;">£290</td><td style="text-align:center;">22</td><td style="text-align:center;color:#60a5fa;">£13.18</td></tr>
+      <tr><td>2026-03-10</td><td>tiktok</td><td>VSL TikTok Cold</td><td>Entrepreneurs 25-45</td><td>UGC Hook v1</td><td style="text-align:center;">62,000</td><td style="text-align:center;">1,400</td><td style="text-align:center;color:#60a5fa;">2.26%</td><td style="text-align:center;">£410</td><td style="text-align:center;">35</td><td style="text-align:center;color:#60a5fa;">£11.71</td></tr>
+      <tr class="total-row"><td>TOTALS</td><td></td><td></td><td></td><td></td><td style="text-align:center;">130,900</td><td style="text-align:center;">2,975</td><td style="text-align:center;">2.27%</td><td style="text-align:center;">£1,445</td><td style="text-align:center;">142</td><td style="text-align:center;">£10.18</td></tr>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- DAILY LOG -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="dailylog" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h2>Daily Log</h2><span class="auto-badge">Auto</span></div>
+    <table>
+      <tr><th>Date</th><th>Leads</th><th>VSL Plays</th><th>Completions</th><th>Applications</th><th>Shows</th><th>Closes</th><th>Revenue</th><th>Ad Spend</th><th>CPL</th></tr>
+      <tr><td>2026-03-04</td><td style="text-align:center;">28</td><td style="text-align:center;">21</td><td style="text-align:center;">8</td><td style="text-align:center;">3</td><td style="text-align:center;">2</td><td style="text-align:center;">1</td><td style="text-align:center;">£8,000</td><td style="text-align:center;">£580</td><td style="text-align:center;color:#52525b;">£20.71</td></tr>
+      <tr><td>2026-03-05</td><td style="text-align:center;">32</td><td style="text-align:center;">24</td><td style="text-align:center;">9</td><td style="text-align:center;">4</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;color:#3f3f46;">£0</td><td style="text-align:center;">£620</td><td style="text-align:center;color:#52525b;">£19.38</td></tr>
+      <tr><td>2026-03-06</td><td style="text-align:center;">26</td><td style="text-align:center;">19</td><td style="text-align:center;">7</td><td style="text-align:center;">2</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;color:#3f3f46;">£0</td><td style="text-align:center;">£540</td><td style="text-align:center;color:#52525b;">£20.77</td></tr>
+      <tr><td>2026-03-07</td><td style="text-align:center;">35</td><td style="text-align:center;">26</td><td style="text-align:center;">10</td><td style="text-align:center;">4</td><td style="text-align:center;">2</td><td style="text-align:center;">1</td><td style="text-align:center;">£8,000</td><td style="text-align:center;">£650</td><td style="text-align:center;color:#52525b;">£18.57</td></tr>
+      <tr><td>2026-03-08</td><td style="text-align:center;">18</td><td style="text-align:center;">14</td><td style="text-align:center;">5</td><td style="text-align:center;">2</td><td style="text-align:center;">0</td><td style="text-align:center;">0</td><td style="text-align:center;color:#3f3f46;">£0</td><td style="text-align:center;">£380</td><td style="text-align:center;color:#52525b;">£21.11</td></tr>
+      <tr><td>2026-03-09</td><td style="text-align:center;">15</td><td style="text-align:center;">11</td><td style="text-align:center;">4</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;">0</td><td style="text-align:center;color:#3f3f46;">£0</td><td style="text-align:center;">£280</td><td style="text-align:center;color:#52525b;">£18.67</td></tr>
+      <tr><td>2026-03-10</td><td style="text-align:center;">31</td><td style="text-align:center;">23</td><td style="text-align:center;">9</td><td style="text-align:center;">3</td><td style="text-align:center;">1</td><td style="text-align:center;">0</td><td style="text-align:center;color:#3f3f46;">£0</td><td style="text-align:center;">£600</td><td style="text-align:center;color:#52525b;">£19.35</td></tr>
+      <tr class="total-row"><td>Week Total</td><td style="text-align:center;">185</td><td style="text-align:center;">138</td><td style="text-align:center;">52</td><td style="text-align:center;">19</td><td style="text-align:center;">7</td><td style="text-align:center;">2</td><td style="text-align:center;">£16,000</td><td style="text-align:center;">£3,650</td><td style="text-align:center;">£19.73</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- VSL ANALYTICS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="vslanalytics" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h2>VSL Analytics</h2><span class="auto-badge">Auto</span></div>
+    <div class="stat-grid stat-grid-4" style="padding:16px 20px;">
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">Page Views</div><div class="sb-value" style="font-size:20px;">2,680</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">Plays</div><div class="sb-value" style="font-size:20px;">612</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">Play Rate</div><div class="sb-value" style="font-size:20px;">22.8%</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">CTA Clicks</div><div class="sb-value" style="font-size:20px;">142</div></div>
+    </div>
+    <table>
+      <tr><th style="text-align:left;">Milestone</th><th>Count</th><th>% of Plays</th><th>Drop-off</th></tr>
+      <tr><td><strong>Plays (Start)</strong></td><td style="text-align:center;">612</td><td style="text-align:center;">100%</td><td></td></tr>
+      <tr><td>25% Watched</td><td style="text-align:center;">489</td><td style="text-align:center;">79.9%</td><td style="text-align:center;"><span class="tag-orange">-20.1%</span></td></tr>
+      <tr><td>50% Watched</td><td style="text-align:center;">367</td><td style="text-align:center;">59.9%</td><td style="text-align:center;"><span class="tag-orange">-20.0%</span></td></tr>
+      <tr><td>75% Watched</td><td style="text-align:center;">298</td><td style="text-align:center;">48.7%</td><td style="text-align:center;color:#52525b;">-11.2%</td></tr>
+      <tr><td>100% Complete</td><td style="text-align:center;">233</td><td style="text-align:center;">38.1%</td><td style="text-align:center;color:#52525b;">-10.6%</td></tr>
+      <tr><td>CTA Click</td><td style="text-align:center;">142</td><td style="text-align:center;">23.2%</td><td style="text-align:center;color:#52525b;">-14.9%</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- REVENUE -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="revenue" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h2>Revenue</h2></div>
+    <div class="stat-grid stat-grid-4" style="padding:16px 20px;">
+      <div class="stat-box accent" style="padding:12px;"><div class="sb-label">Total Revenue</div><div class="sb-value" style="font-size:20px;">£96,000</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">Clients</div><div class="sb-value" style="font-size:20px;">12</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">Avg Deal</div><div class="sb-value" style="font-size:20px;">£8,000</div></div>
+      <div class="stat-box" style="padding:12px;"><div class="sb-label">ROAS</div><div class="sb-value" style="font-size:20px;color:#34d399;">4.8x</div></div>
+    </div>
+    <div style="overflow-x:auto;">
+    <table>
+      <tr><th>Date</th><th>Client</th><th>Email</th><th style="color:#34d399;">Source</th><th style="color:#34d399;">Campaign</th><th style="color:#34d399;">Creative</th><th>Value</th><th>CPA</th></tr>
+      <tr><td>2026-03-04</td><td>John Smith</td><td style="color:#60a5fa;">john@example.com</td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td style="color:#34d399;">hook_pain_v1</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£580</td></tr>
+      <tr><td>2026-03-07</td><td>Sarah Jones</td><td style="color:#60a5fa;">sarah@example.com</td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td style="color:#34d399;">testimonial_v2</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£420</td></tr>
+      <tr><td>2026-03-09</td><td>Mark Williams</td><td style="color:#60a5fa;">mark@example.org</td><td style="color:#34d399;">google</td><td style="color:#34d399;">vsl_search_brand</td><td style="color:#34d399;">free_training</td><td style="color:#34d399;font-weight:700;">£8,000</td><td style="color:#52525b;">£650</td></tr>
+    </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- LEAD JOURNEYS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div id="leadjourneys" class="tab-content">
+  <div class="card">
+    <div class="card-header"><h2>Lead Journeys</h2><span class="hidden-badge">Hidden</span></div>
+    <div style="overflow-x:auto;">
+    <table>
+      <tr><th>Timestamp</th><th>Email</th><th>Event</th><th>Source</th><th>Name</th><th>UTM Source</th><th>Campaign</th><th>Video %</th><th>Deal Value</th></tr>
+      <tr><td>2026-03-10 09:14:22</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">page_view</code></td><td style="color:#52525b;">tracking</td><td></td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td></td><td></td></tr>
+      <tr><td>2026-03-10 09:15:08</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">vsl_play</code></td><td style="color:#52525b;">tracking</td><td></td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td></td><td></td></tr>
+      <tr><td>2026-03-10 09:33:45</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">vsl_milestone_100</code></td><td style="color:#52525b;">tracking</td><td></td><td></td><td></td><td style="color:#34d399;">100%</td><td></td></tr>
+      <tr><td>2026-03-10 09:34:02</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">cta_click</code></td><td style="color:#52525b;">tracking</td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>2026-03-10 09:38:20</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">application_submit</code></td><td style="color:#52525b;">typeform</td><td>John</td><td style="color:#34d399;">facebook</td><td style="color:#34d399;">vsl_coaches_mar26</td><td></td><td></td></tr>
+      <tr><td>2026-03-14 14:00:00</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#a78bfa;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">show</code></td><td style="color:#52525b;">ghl</td><td>John</td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>2026-03-14 14:45:00</td><td style="color:#60a5fa;">john@example.com</td><td><code style="color:#34d399;background:#18181b;padding:1px 5px;border-radius:3px;font-size:11px;">close</code></td><td style="color:#52525b;">ghl</td><td>John</td><td></td><td></td><td></td><td style="color:#34d399;font-weight:700;">£8,000</td></tr>
+    </table>
+    </div>
+  </div>
+</div>
+
+<footer style="text-align:center;padding:20px 0;border-top:1px solid #1c1c22;margin-top:40px;color:#52525b;font-size:13px;">
+  The figures on this page are sample data. Your live numbers are in your Google Sheet.
+</footer>
+
+<script>
+// ── Optional password gate ──
+// The page is open by default. It only asks for a password when the
+// ACCESS_PASSWORD environment variable is set on the server.
+var API_BASE = '/api';
+function unlock() {
+  document.getElementById('auth-gate').style.display = 'none';
+  document.body.classList.remove('locked');
+}
+function lock() {
+  document.body.classList.add('locked');
+  document.getElementById('auth-gate').style.display = 'flex';
+}
+function authCheck(pw) {
+  var headers = pw ? { 'X-Access-Password': pw } : {};
+  return fetch(API_BASE + '?action=auth_check', { headers: headers }).then(function(r) { return r.json(); });
+}
+function applyBrand(info) {
+  if (!info) return;
+  if (info.brand_name) {
+    document.querySelectorAll('.brand-name').forEach(function(el) { el.textContent = info.brand_name; });
+    document.title = info.brand_name + ' | VSL Funnel Tracker';
+  }
+  if (info.brand_tagline) {
+    document.querySelectorAll('.brand-tagline').forEach(function(el) { el.textContent = info.brand_tagline; });
+  }
+}
+function checkGate() {
+  var pw = document.getElementById('gate-pw').value;
+  authCheck(pw).then(function(info) {
+    if (info.authorised) {
+      try { sessionStorage.setItem('vsl_access_pw', pw); } catch (e) {}
+      unlock();
+    } else {
+      document.getElementById('gate-err').style.display = 'block';
+    }
+  }).catch(function() {
+    document.getElementById('gate-err').style.display = 'block';
+  });
+}
+(function initGate() {
+  var saved = '';
+  try { saved = sessionStorage.getItem('vsl_access_pw') || ''; } catch (e) {}
+  authCheck(saved).then(function(info) {
+    applyBrand(info);
+    if (info.password_required && !info.authorised) lock();
+  }).catch(function() {
+    // No API reachable (for example the file was opened directly): stay open.
+  });
+})();
+// ── Currency Switcher ──
+var currencySymbols = { GBP: '£', USD: '$', EUR: '€' };
+var currentCurrency = 'GBP';
+function switchCurrency(code) {
+  var oldSym = currencySymbols[currentCurrency];
+  var newSym = currencySymbols[code];
+  currentCurrency = code;
+  // Replace all currency symbols in the page content
+  var els = document.querySelectorAll('.sb-value, .pc-value, .stat-box .sb-value, td, .wr-this, .wr-last, .cs-value, .br-fill, .br-value');
+  els.forEach(function(el) {
+    if (el.innerHTML.indexOf(oldSym) !== -1) {
+      el.innerHTML = el.innerHTML.split(oldSym).join(newSym);
+    }
+  });
+  // Also handle elements that contain the symbol in text
+  var allText = document.querySelectorAll('.tab-content *, .stat-grid *');
+  allText.forEach(function(el) {
+    if (el.children.length === 0 && el.textContent.indexOf(oldSym) !== -1) {
+      el.textContent = el.textContent.split(oldSym).join(newSym);
+    }
+  });
+}
+
+// ── Connection Modal ──
+var connData = {
+  gsheets: { name: 'Google Sheets', label: 'SPREADSHEET ID', placeholder: 'e.g. 1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', instructions: '<strong>How to connect Google Sheets:</strong><ol><li>Open your Google Sheet and copy the ID from the URL<br><code style="color:#60a5fa;font-size:11px;">docs.google.com/spreadsheets/d/<strong>[THIS-ID]</strong>/edit</code></li><li>Share the sheet with the service account email</li><li>Paste the Spreadsheet ID below</li></ol>' },
+  meta: { name: 'Meta Ads API', label: 'ACCESS TOKEN', placeholder: 'e.g. EAABsbCS1...', instructions: '<strong>How to connect Meta Ads:</strong><ol><li>Go to <strong>Meta Business Manager</strong> → Business Settings</li><li>Navigate to <strong>System Users</strong> → Generate Token</li><li>Select permissions: <code>ads_read</code>, <code>read_insights</code></li><li>Copy the token and paste below</li></ol>' },
+  crm: { name: 'CRM Webhooks', label: 'WEBHOOK URL', placeholder: 'e.g. https://hooks.zapier.com/...', instructions: '<strong>How to connect CRM Webhooks:</strong><ol><li>In your CRM (GoHighLevel, Close, HubSpot), go to <strong>Automations</strong></li><li>Create a webhook trigger for deal stage changes</li><li>Copy the webhook URL and paste below</li><li>Events will sync automatically on trigger</li></ol>' },
+  tracking: { name: 'Video Tracking', label: 'TRACKING SNIPPET ID', placeholder: 'e.g. vsl_track_abc123', instructions: '<strong>How to connect Video Tracking:</strong><ol><li>Add the VSL tracking snippet to your landing page <code>&lt;head&gt;</code></li><li>The snippet auto-detects video players (Vimeo, Wistia, HTML5)</li><li>Events fire at 25%, 50%, 75%, 100% milestones + CTA clicks</li><li>Paste your tracking ID below to link this dashboard</li></ol>' },
+  tiktok: { name: 'TikTok Ads', label: 'ACCESS TOKEN', placeholder: 'e.g. tk_abc123...', instructions: '<strong>How to connect TikTok Ads:</strong><ol><li>Go to <strong>TikTok Ads Manager</strong> → Assets → Events</li><li>Navigate to <strong>Developer Portal</strong> → Create App</li><li>Generate a long-lived access token with <code>Ad Account Read</code> permission</li><li>Paste the token below</li></ol>' }
+};
+var currentConn = null;
+function openConn(id) {
+  currentConn = id;
+  var d = connData[id];
+  var el = document.getElementById('conn-' + id);
+  var isConnected = el.querySelector('.dot').classList.contains('dot-green');
+  document.getElementById('cm-title').textContent = d.name;
+  document.getElementById('cm-status').innerHTML = '<span class="dot ' + (isConnected ? 'dot-green' : 'dot-amber') + '"></span> ' + (isConnected ? 'Connected' : 'Not connected');
+  document.getElementById('cm-instructions').innerHTML = d.instructions;
+  document.getElementById('cm-input-label').textContent = d.label;
+  document.getElementById('cm-input').placeholder = d.placeholder;
+  document.getElementById('cm-input').value = isConnected ? '••••••••••••••••••••' : '';
+  document.getElementById('cm-form').style.display = 'block';
+  document.getElementById('cm-success').style.display = 'none';
+  document.getElementById('conn-modal-overlay').style.display = 'block';
+  document.getElementById('conn-modal').style.display = 'block';
+}
+function closeConn() {
+  document.getElementById('conn-modal-overlay').style.display = 'none';
+  document.getElementById('conn-modal').style.display = 'none';
+  currentConn = null;
+}
+function connectAPI() {
+  var val = document.getElementById('cm-input').value.trim();
+  if (!val) return;
+  var el = document.getElementById('conn-' + currentConn);
+  el.querySelector('.dot').className = 'dot dot-green';
+  document.getElementById('cm-form').style.display = 'none';
+  document.getElementById('cm-success').style.display = 'block';
+  document.getElementById('cm-success-text').textContent = connData[currentConn].name + ' connected successfully';
+  setTimeout(closeConn, 1500);
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+
+</body>
+</html>

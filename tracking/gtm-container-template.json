@@ -1,0 +1,148 @@
+{
+  "exportFormatVersion": 2,
+  "exportTime": "2026-03-11",
+  "description": "VSL Funnel Tracker — GTM Container (Advanced Tier). Import into your GTM Web Container.",
+  "containerVersion": {
+    "tag": [
+      {
+        "name": "Meta Pixel - Base Code",
+        "type": "html",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "html",
+            "value": "<script>\n!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');\nfbq('init', '{{Meta Pixel ID}}');\nfbq('track', 'PageView');\n</script>"
+          }
+        ],
+        "firingTriggerId": ["All Pages"],
+        "notes": "Replace {{Meta Pixel ID}} with your actual Pixel ID via the GTM variable"
+      },
+      {
+        "name": "Meta Pixel - Lead Event (Opt-in)",
+        "type": "html",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "html",
+            "value": "<script>\nvar eventId = '{{DL - Event ID}}' || 'ev_' + Date.now() + '_' + Math.random().toString(36).substr(2,9);\nfbq('track', 'Lead', {content_name: 'VSL Opt-in'}, {eventID: eventId});\n</script>"
+          }
+        ],
+        "firingTriggerId": ["CE - Opt-in Form Submitted"]
+      },
+      {
+        "name": "Meta Pixel - Video Start",
+        "type": "html",
+        "parameter": [
+          {
+            "type": "TEMPLATE",
+            "key": "html",
+            "value": "<script>fbq('trackCustom', 'VideoStart', {video_title: 'Main VSL'}, {eventID: '{{DL - Event ID}}'});</script>"
+          }
+        ],
+        "firingTriggerId": ["CE - VSL Play"]
+      },
+      {
+        "name": "Meta Pixel - Video 25%",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('trackCustom','Video25Percent',{},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - VSL Milestone 25"]
+      },
+      {
+        "name": "Meta Pixel - Video 50%",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('trackCustom','Video50Percent',{},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - VSL Milestone 50"]
+      },
+      {
+        "name": "Meta Pixel - Video 75%",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('trackCustom','Video75Percent',{},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - VSL Milestone 75"]
+      },
+      {
+        "name": "Meta Pixel - Video Complete",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('trackCustom','VideoComplete',{video_title:'Main VSL'},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - VSL Milestone 100"]
+      },
+      {
+        "name": "Meta Pixel - Schedule (Booking)",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('track','Schedule',{content_name:'Strategy Call Booked',currency:'GBP',value:50},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - Booking Complete"]
+      },
+      {
+        "name": "Meta Pixel - Application Submit",
+        "type": "html",
+        "parameter": [{"type":"TEMPLATE","key":"html","value":"<script>fbq('track','SubmitApplication',{},{eventID:'{{DL - Event ID}}'});</script>"}],
+        "firingTriggerId": ["CE - Application Submit"]
+      },
+      {
+        "name": "GA4 - Configuration",
+        "type": "gaawc",
+        "parameter": [
+          {"type":"TEMPLATE","key":"measurementId","value":"{{GA4 Measurement ID}}"}
+        ],
+        "firingTriggerId": ["All Pages"],
+        "notes": "Replace {{GA4 Measurement ID}} with your G-XXXXXXXXXX via GTM variable"
+      },
+      {
+        "name": "GA4 - generate_lead",
+        "type": "gaawe",
+        "parameter": [
+          {"type":"TEMPLATE","key":"eventName","value":"generate_lead"},
+          {"type":"TEMPLATE","key":"measurementId","value":"{{GA4 Measurement ID}}"}
+        ],
+        "firingTriggerId": ["CE - Opt-in Form Submitted"]
+      },
+      {
+        "name": "GA4 - video_start",
+        "type": "gaawe",
+        "parameter": [
+          {"type":"TEMPLATE","key":"eventName","value":"video_start"},
+          {"type":"TEMPLATE","key":"measurementId","value":"{{GA4 Measurement ID}}"}
+        ],
+        "firingTriggerId": ["CE - VSL Play"]
+      },
+      {
+        "name": "GA4 - application_submit",
+        "type": "gaawe",
+        "parameter": [
+          {"type":"TEMPLATE","key":"eventName","value":"application_submit"},
+          {"type":"TEMPLATE","key":"measurementId","value":"{{GA4 Measurement ID}}"}
+        ],
+        "firingTriggerId": ["CE - Application Submit"]
+      },
+      {
+        "name": "GA4 - booking_complete",
+        "type": "gaawe",
+        "parameter": [
+          {"type":"TEMPLATE","key":"eventName","value":"booking_complete"},
+          {"type":"TEMPLATE","key":"measurementId","value":"{{GA4 Measurement ID}}"}
+        ],
+        "firingTriggerId": ["CE - Booking Complete"]
+      }
+    ],
+    "trigger": [
+      {"name": "All Pages", "type": "PAGEVIEW"},
+      {"name": "CE - Opt-in Form Submitted", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"optin_form_submitted"}]}]},
+      {"name": "CE - VSL Play", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"vsl_play"}]}]},
+      {"name": "CE - VSL Milestone 25", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"vsl_milestone_25"}]}]},
+      {"name": "CE - VSL Milestone 50", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"vsl_milestone_50"}]}]},
+      {"name": "CE - VSL Milestone 75", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"vsl_milestone_75"}]}]},
+      {"name": "CE - VSL Milestone 100", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"vsl_milestone_100"}]}]},
+      {"name": "CE - CTA Click", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"cta_click"}]}]},
+      {"name": "CE - Application Submit", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"application_submit"}]}]},
+      {"name": "CE - Booking Complete", "type": "CUSTOM_EVENT", "customEventFilter": [{"type":"EQUALS","parameter":[{"type":"TEMPLATE","key":"arg0","value":"{{_event}}"},{"type":"TEMPLATE","key":"arg1","value":"booking_complete"}]}]}
+    ],
+    "variable": [
+      {"name": "DL - Event ID", "type": "v", "parameter": [{"type":"TEMPLATE","key":"name","value":"eventId"}]},
+      {"name": "DL - Email", "type": "v", "parameter": [{"type":"TEMPLATE","key":"name","value":"email"}]},
+      {"name": "DL - Event Type", "type": "v", "parameter": [{"type":"TEMPLATE","key":"name","value":"eventType"}]},
+      {"name": "Meta Pixel ID", "type": "c", "parameter": [{"type":"TEMPLATE","key":"value","value":"YOUR_PIXEL_ID_HERE"}], "notes": "Replace with actual Pixel ID"},
+      {"name": "GA4 Measurement ID", "type": "c", "parameter": [{"type":"TEMPLATE","key":"value","value":"G-XXXXXXXXXX"}], "notes": "Replace with actual GA4 ID"},
+      {"name": "Cookie - fbp", "type": "k", "parameter": [{"type":"TEMPLATE","key":"name","value":"_fbp"}]},
+      {"name": "Cookie - fbc", "type": "k", "parameter": [{"type":"TEMPLATE","key":"name","value":"_fbc"}]}
+    ]
+  }
+}
